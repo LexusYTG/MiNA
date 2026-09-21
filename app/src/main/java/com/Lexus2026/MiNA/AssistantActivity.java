@@ -62,7 +62,7 @@ public class AssistantActivity extends Activity {
 
         Intent incoming = getIntent();
         String action = (incoming != null && incoming.getAction() != null)
-			? incoming.getAction() : "(null)";
+			? incoming.getAction() : Lang.get(291);
 
         launchedAsAssist = Intent.ACTION_ASSIST.equals(action)
 			|| Intent.ACTION_VOICE_COMMAND.equals(action);
@@ -79,7 +79,7 @@ public class AssistantActivity extends Activity {
         tts.setListener(ttsListener);
         tts.init(this);
 
-        setStatus(Lang.f(1107, action), Ui.TEXT_DIM);
+        setStatus(Lang.f(31, action), Ui.TEXT_DIM);
 
         updateVoiceSetupButton();
     }
@@ -89,7 +89,7 @@ public class AssistantActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (intent != null && intent.getAction() != null) {
-            setStatus(Lang.f(1107, intent.getAction()), Ui.TEXT_DIM);
+            setStatus(Lang.f(31, intent.getAction()), Ui.TEXT_DIM);
         }
     }
 
@@ -172,7 +172,7 @@ public class AssistantActivity extends Activity {
         stLp.topMargin = Ui.dp(this, 6);
         panel.addView(statusText, stLp);
 
-        voiceSetupButton = Ui.button(this, Lang.get(1105), false);
+        voiceSetupButton = Ui.button(this, Lang.get(29), false);
         voiceSetupButton.setVisibility(View.GONE);
         LinearLayout.LayoutParams vLp = Ui.matchWrap();
         vLp.topMargin = Ui.dp(this, 10);
@@ -237,7 +237,7 @@ public class AssistantActivity extends Activity {
     }
 
     private void greet() {
-        say(Lang.get(1201), launchedAsAssist);
+        say(Lang.get(49), launchedAsAssist);
     }
 
     private void toggleListening() {
@@ -263,35 +263,41 @@ public class AssistantActivity extends Activity {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 voice.start();
             } else {
-                setStatus(Lang.get(1104), Ui.WARN);
+                setStatus(Lang.get(28), Ui.WARN);
             }
         }
     }
 
     private void handleUserText(String text) {
-        appendLine(Lang.get(1108), text, Ui.TEXT);
-        CommandRouter.Response r = router.route(text);
-        say(r.text, false);
-
-        if (r.intent != null) {
-            try {
-                startActivity(r.intent);
-            } catch (Exception e) {
-                setStatus(Lang.get(1106), Ui.WARN);
-                return;
-            }
-        }
-        if (r.closeAfter) {
-            ui.postDelayed(new Runnable() {
-					@Override public void run() { finish(); }
-				}, 1400);
-        }
+        appendLine(Lang.get(32), text, Ui.TEXT);
+        router.routeAsync(text, new CommandRouter.Callback() {
+				@Override public void onResult(final CommandRouter.Response r) {
+					runOnUiThread(new Runnable() {
+							@Override public void run() {
+								say(r.text, false);
+								if (r.intent != null) {
+									try {
+										startActivity(r.intent);
+									} catch (Exception e) {
+										setStatus(Lang.get(30), Ui.WARN);
+										return;
+									}
+								}
+								if (r.closeAfter) {
+									ui.postDelayed(new Runnable() {
+											@Override public void run() { finish(); }
+										}, 1400);
+								}
+							}
+						});
+				}
+			});
     }
 
     private final VoiceEngine.Listener voiceListener = new VoiceEngine.Listener() {
         @Override public void onReady() {
             startPulse();
-            setStatus(Lang.get(1102), Ui.ACCENT);
+            setStatus(Lang.get(26), Ui.ACCENT);
             partialText.setText("");
         }
         @Override public void onPartial(String text) { partialText.setText(text); }
@@ -299,7 +305,7 @@ public class AssistantActivity extends Activity {
             stopPulse();
             partialText.setText("");
             if (text == null || text.trim().isEmpty()) {
-                setStatus(Lang.get(1103), Ui.WARN);
+                setStatus(Lang.get(27), Ui.WARN);
                 return;
             }
             handleUserText(text);
@@ -325,13 +331,13 @@ public class AssistantActivity extends Activity {
                 return;
             }
             if (!isFinishing()) {
-                setStatus(Lang.get(1100), Ui.TEXT_DIM);
+                setStatus(Lang.get(24), Ui.TEXT_DIM);
             }
         }
     };
 
     private void say(String text, boolean chainListen) {
-        appendLine(Lang.get(1109), text, Ui.ACCENT);
+        appendLine(Lang.get(33), text, Ui.ACCENT);
         pendingAutoListen = chainListen;
         tts.speak(text);
     }

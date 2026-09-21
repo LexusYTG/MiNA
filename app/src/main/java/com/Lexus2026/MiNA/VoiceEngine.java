@@ -43,7 +43,7 @@ class VoiceEngine {
     void start() {
         if (listening) return;
         if (!isAvailable()) {
-            if (listener != null) listener.onError(Lang.get(1159));
+            if (listener != null) listener.onError(Lang.get(43));
             return;
         }
         if (recognizer == null) {
@@ -55,18 +55,21 @@ class VoiceEngine {
 				   RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Lang.getLocaleTag());
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Lang.getLocaleTag());
+        i.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.getPackageName());
-        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L);
-        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
-        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, Lang.get(290));
+
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 5000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
         listening = true;
         try {
             recognizer.startListening(i);
         } catch (Exception e) {
             listening = false;
-            if (listener != null) listener.onError(Lang.get(1160));
+            if (listener != null) listener.onError(Lang.get(44));
         }
     }
 
@@ -126,24 +129,24 @@ class VoiceEngine {
     private String mapError(int error) {
         switch (error) {
             case SpeechRecognizer.ERROR_NO_MATCH:
-                return Lang.get(1151);
+                return Lang.get(35);
             case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
-                return Lang.get(1152);
+                return Lang.get(36);
             case SpeechRecognizer.ERROR_NETWORK:
             case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
-                return Lang.get(1153);
+                return Lang.get(37);
             case SpeechRecognizer.ERROR_AUDIO:
-                return Lang.get(1154);
+                return Lang.get(38);
             case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
-                return Lang.get(1150);
+                return Lang.get(34);
             case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
-                return Lang.get(1155);
+                return Lang.get(39);
             case SpeechRecognizer.ERROR_SERVER:
-                return Lang.get(1156);
+                return Lang.get(40);
             case SpeechRecognizer.ERROR_CLIENT:
-                return Lang.get(1157);
+                return Lang.get(41);
             default:
-                return Lang.f(1163, error);
+                return Lang.f(47, error);
         }
     }
 }

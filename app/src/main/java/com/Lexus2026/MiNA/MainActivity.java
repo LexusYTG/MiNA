@@ -1,10 +1,12 @@
 package com.Lexus2026.MiNA;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.Dialog;
 import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -19,10 +21,14 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
+
+    private static final int REQ_PERMS          = 200;
+    private static final int REQ_ASSISTANT_ROLE = 42;
 
     private final Lang.Listener langListener = new Lang.Listener() {
         @Override public void onLanguageChanged() {
@@ -45,12 +51,14 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Ui.BG);
         getWindow().setBackgroundDrawable(new ColorDrawable(Ui.BG));
         setContentView(buildUi());
+        requestMissingPermissions();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         refreshStatus();
+        requestMissingPermissions();
     }
 
     @Override
@@ -58,6 +66,44 @@ public class MainActivity extends Activity {
         super.onDestroy();
         Lang.removeListener(langListener);
     }
+
+    // =================================================================
+    // Permisos runtime
+    // =================================================================
+
+    private void requestMissingPermissions() {
+        if (Build.VERSION.SDK_INT < 23) return;
+
+        List<String> needed = new ArrayList<String>();
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+			!= PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECORD_AUDIO);
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+			!= PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+			!= PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+
+        if (!needed.isEmpty()) {
+            requestPermissions(needed.toArray(new String[0]), REQ_PERMS);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int rc, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(rc, perms, results);
+        // Nada especial. Si deniega, el clima cae a ciudad explícita
+        // y el asistente pide el micrófono otra vez cuando se use.
+    }
+
+    // =================================================================
+    // UI
+    // =================================================================
 
     private View buildUi() {
         ScrollView scroll = new ScrollView(this);
@@ -69,8 +115,8 @@ public class MainActivity extends Activity {
         root.setPadding(pad, Ui.dp(this, 32), pad, Ui.dp(this, 32));
         scroll.addView(root);
 
-        root.addView(Ui.h1(this, Lang.get(1000)));
-        TextView subtitle = Ui.body(this, Lang.get(1001));
+        root.addView(Ui.h1(this, Lang.get(1)));
+        TextView subtitle = Ui.body(this, Lang.get(2));
         LinearLayout.LayoutParams subLp = Ui.matchWrap();
         subLp.topMargin = Ui.dp(this, 4);
         root.addView(subtitle, subLp);
@@ -80,7 +126,7 @@ public class MainActivity extends Activity {
         LinearLayout statusRow = Ui.row(this);
         statusDot = Ui.text(this, "●", 20, Ui.WARN, true);
         statusRow.addView(statusDot);
-        statusText = Ui.text(this, Lang.get(1002), 16, Ui.TEXT, true);
+        statusText = Ui.text(this, Lang.get(3), 16, Ui.TEXT, true);
         LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(
 			LinearLayout.LayoutParams.WRAP_CONTENT,
 			LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -97,24 +143,24 @@ public class MainActivity extends Activity {
         root.addView(Ui.space(this, 16));
 
         LinearLayout actions = Ui.card(this);
-        actions.addView(Ui.h2(this, Lang.get(1007)));
+        actions.addView(Ui.h2(this, Lang.get(8)));
         actions.addView(Ui.space(this, 12));
 
-        Button setDefault = Ui.button(this, Lang.get(1008), true);
+        Button setDefault = Ui.button(this, Lang.get(9), true);
         setDefault.setOnClickListener(new View.OnClickListener() {
 				@Override public void onClick(View v) { requestAssistantRole(); }
 			});
         actions.addView(setDefault, Ui.matchWrap());
         actions.addView(Ui.space(this, 10));
 
-        Button openSettings = Ui.button(this, Lang.get(1009), false);
+        Button openSettings = Ui.button(this, Lang.get(10), false);
         openSettings.setOnClickListener(new View.OnClickListener() {
 				@Override public void onClick(View v) { openAssistantSettings(); }
 			});
         actions.addView(openSettings, Ui.matchWrap());
         actions.addView(Ui.space(this, 10));
 
-        Button test = Ui.button(this, Lang.get(1010), false);
+        Button test = Ui.button(this, Lang.get(11), false);
         test.setOnClickListener(new View.OnClickListener() {
 				@Override public void onClick(View v) {
 					Intent i = new Intent(MainActivity.this, AssistantActivity.class);
@@ -128,13 +174,13 @@ public class MainActivity extends Activity {
         root.addView(Ui.space(this, 16));
 
         LinearLayout langCard = Ui.card(this);
-        langCard.addView(Ui.h2(this, Lang.get(1011)));
+        langCard.addView(Ui.h2(this, Lang.get(12)));
         langCard.addView(Ui.space(this, 8));
         langCard.addView(Ui.body(this,
-								 Lang.f(1051, Lang.getDisplayName(Lang.getActiveLanguage()))));
+								 Lang.f(18, Lang.getDisplayName(Lang.getActiveLanguage()))));
         LinearLayout.LayoutParams lbLp = Ui.matchWrap();
         lbLp.topMargin = Ui.dp(this, 10);
-        Button changeLang = Ui.button(this, Lang.get(1012), false);
+        Button changeLang = Ui.button(this, Lang.get(13), false);
         changeLang.setOnClickListener(new View.OnClickListener() {
 				@Override public void onClick(View v) { showLanguageDialog(); }
 			});
@@ -144,13 +190,13 @@ public class MainActivity extends Activity {
         root.addView(Ui.space(this, 16));
 
         LinearLayout info = Ui.card(this);
-        info.addView(Ui.h2(this, Lang.get(1014)));
+        info.addView(Ui.h2(this, Lang.get(15)));
         info.addView(Ui.space(this, 8));
-        info.addView(Ui.body(this, Lang.get(1015)));
+        info.addView(Ui.body(this, Lang.get(16)));
         root.addView(info);
 
         root.addView(Ui.space(this, 24));
-        TextView foot = Ui.body(this, Lang.get(1013));
+        TextView foot = Ui.body(this, Lang.get(14));
         foot.setGravity(Gravity.CENTER);
         root.addView(foot, Ui.matchWrap());
 
@@ -159,7 +205,7 @@ public class MainActivity extends Activity {
     }
 
     // =================================================================
-    // Diálogo flotante de idiomas
+    // Diálogo de idiomas
     // =================================================================
 
     private void showLanguageDialog() {
@@ -175,13 +221,13 @@ public class MainActivity extends Activity {
         int pad = Ui.dp(this, 20);
         panel.setPadding(pad, pad, pad, pad);
 
-        final TextView title = Ui.text(this, Lang.get(1050), 20, Ui.TEXT, true);
+        TextView title = Ui.text(this, Lang.get(17), 20, Ui.TEXT, true);
         panel.addView(title);
 
         panel.addView(Ui.space(this, 6));
 
-        final TextView sub = Ui.body(this,
-									 Lang.f(1051, Lang.getDisplayName(Lang.getActiveLanguage())));
+        TextView sub = Ui.body(this,
+							   Lang.f(18, Lang.getDisplayName(Lang.getActiveLanguage())));
         panel.addView(sub);
 
         panel.addView(Ui.space(this, 16));
@@ -191,13 +237,12 @@ public class MainActivity extends Activity {
 
         panel.addView(Ui.space(this, 12));
 
-        Button cancel = Ui.button(this, Lang.get(1053), false);
+        Button cancel = Ui.button(this, Lang.get(20), false);
         cancel.setOnClickListener(new View.OnClickListener() {
 				@Override public void onClick(View v) { dialog.dismiss(); }
 			});
         panel.addView(cancel, Ui.matchWrap());
 
-        // Rellenar la lista (o estado de carga / error)
         final Runnable populate = new Runnable() {
             @Override public void run() {
                 listContainer.removeAllViews();
@@ -206,7 +251,7 @@ public class MainActivity extends Activity {
 
                 if (langs.isEmpty()) {
                     TextView loading = Ui.text(MainActivity.this,
-											   Lang.get(1054), 14, Ui.TEXT_DIM, false);
+											   Lang.get(21), 14, Ui.TEXT_DIM, false);
                     loading.setGravity(Gravity.CENTER);
                     LinearLayout.LayoutParams lp = Ui.matchWrap();
                     lp.topMargin = Ui.dp(MainActivity.this, 20);
@@ -319,12 +364,12 @@ public class MainActivity extends Activity {
         boolean isDefault = isDefaultAssistant();
         if (isDefault) {
             statusDot.setTextColor(Ui.OK);
-            statusText.setText(Lang.get(1003));
-            statusHint.setText(Lang.get(1005));
+            statusText.setText(Lang.get(4));
+            statusHint.setText(Lang.get(6));
         } else {
             statusDot.setTextColor(Ui.WARN);
-            statusText.setText(Lang.get(1004));
-            statusHint.setText(Lang.get(1006));
+            statusText.setText(Lang.get(5));
+            statusHint.setText(Lang.get(7));
         }
     }
 
@@ -346,7 +391,7 @@ public class MainActivity extends Activity {
 				&& rm.isRoleAvailable(RoleManager.ROLE_ASSISTANT)
 				&& !rm.isRoleHeld(RoleManager.ROLE_ASSISTANT)) {
                 Intent i = rm.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT);
-                startActivityForResult(i, 42);
+                startActivityForResult(i, REQ_ASSISTANT_ROLE);
                 return;
             }
         }
