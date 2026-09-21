@@ -66,7 +66,6 @@ public final class Lang {
     private static final String KEY_LANG_NAMES  = "lang_names";
     private static final String KEY_LAST_FETCH  = "lang_last_fetch_ms";
 
-    // Cambia esta URL por el repo de MiNA cuando lo tengas.
     private static final String REMOTE_URL =
 	"https://raw.githubusercontent.com/LexusYTG/MiNA/main/lang.json";
 
@@ -74,6 +73,7 @@ public final class Lang {
 
     public static final String DEFAULT_LANG = "es";
 
+    // Solo se usa para detectSystemLanguage(), NO para la lista visible.
     private static final String[] BUILTIN_LANGS = {
         "es", "en", "pt", "fr", "de", "it", "ja", "zh", "ru"
     };
@@ -90,10 +90,6 @@ public final class Lang {
     private static final Map<Integer, String> sStrings = new HashMap<Integer, String>();
 
     private Lang() { }
-
-    // ========================================================================
-    // INIT
-    // ========================================================================
 
     public static synchronized void init(Context ctx) {
         if (ctx == null) return;
@@ -193,10 +189,6 @@ public final class Lang {
         } finally { c.disconnect(); }
     }
 
-    // ========================================================================
-    // API PÚBLICA
-    // ========================================================================
-
     public static String get(int id) {
         String s = sStrings.get(id);
         if (s != null) return s;
@@ -211,7 +203,6 @@ public final class Lang {
 
     public static String getActiveLanguage() { return sActiveLang; }
 
-    /** Devuelve un tag BCP-47 para TTS / SpeechRecognizer. */
     public static String getLocaleTag() {
         String l = sActiveLang;
         if ("es".equals(l)) return "es-ES";
@@ -226,9 +217,12 @@ public final class Lang {
         return l;
     }
 
+    /**
+     * Lista de idiomas disponibles. Se obtiene EXCLUSIVAMENTE del CSV
+     * persistido desde el lang.json remoto. Sin hardcodeo.
+     */
     public static List<String> getAvailableLanguages() {
         TreeSet<String> set = new TreeSet<String>();
-        set.add(DEFAULT_LANG);
         String csv = prefs().getString(KEY_LANGS_LIST, "");
         if (!csv.isEmpty()) {
             for (String s : csv.split(",")) {
@@ -236,25 +230,18 @@ public final class Lang {
                 if (!t.isEmpty()) set.add(t);
             }
         }
-        if (set.size() == 1) {
-            for (String b : BUILTIN_LANGS) set.add(b);
-        }
         return new ArrayList<String>(set);
     }
 
+    /**
+     * Nombre visible de un idioma. Se obtiene EXCLUSIVAMENTE del JSON de
+     * nombres persistido desde el lang.json remoto. Sin hardcodeo.
+     * Si no hay nombre guardado, se muestra el código en mayúsculas.
+     */
     public static String getDisplayName(String langId) {
         if (langId == null || langId.isEmpty()) return "";
         String stored = getStoredLangName(langId);
         if (stored != null && !stored.isEmpty()) return stored;
-        if ("es".equals(langId)) return "Español";
-        if ("en".equals(langId)) return "English";
-        if ("pt".equals(langId)) return "Português";
-        if ("fr".equals(langId)) return "Français";
-        if ("de".equals(langId)) return "Deutsch";
-        if ("it".equals(langId)) return "Italiano";
-        if ("ja".equals(langId)) return "日本語";
-        if ("zh".equals(langId)) return "中文";
-        if ("ru".equals(langId)) return "Русский";
         return langId.toUpperCase(Locale.ROOT);
     }
 
@@ -293,9 +280,15 @@ public final class Lang {
     }
     public static void refreshLanguages() { fetchRemoteAsync(); }
 
-    // ========================================================================
-    // INTERNO
-    // ========================================================================
+    public static void clearCache() {
+        SharedPreferences.Editor ed = prefs().edit();
+        ed.remove(KEY_LANGS_LIST);
+        ed.remove(KEY_LANG_NAMES);
+        ed.remove(KEY_LAST_FETCH);
+        for (String b : BUILTIN_LANGS) ed.remove(KEY_DATA_PREFIX + b);
+        ed.apply();
+        loadFallback();
+    }
 
     private static SharedPreferences prefs() {
         return sAppContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -437,27 +430,30 @@ public final class Lang {
             if (lower.startsWith("langid=")) {
                 int eq = line.indexOf('=');
                 int brace = line.indexOf('{', eq);
-                if (eq >= 0 && brace > eq) {
-                    currentLang = line.substring(eq + 1, brace).trim();
-                    currentMap  = new HashMap<Integer, String>();
-                } else if (eq >= 0) {
-                    currentLang = line.substring(eq + 1).trim();
-                    currentMap  = new HashMap<Integer, String>();
-                }
+                String segment = (brace > eq)
+                    ? line.substring(eq + 1, brace).trim()
+                    : line.substring(eq + 1).trim();
+
+                int sp = segment.indexOf(' ');
+                String code = (sp > 0) ? segment.substring(0, sp).trim() : segment;
+                code = code.replace("{", "").replace("}", "").trim();
+                if (code.isEmpty()) continue;
+
+                currentLang = code;
+                currentMap = new HashMap<Integer, String>();
+
                 int lnIdx = lower.indexOf("langname=");
-                if (lnIdx >= 0 && currentLang != null) {
-                    String rest = line.substring(lnIdx + 9).trim();
-                    int br = rest.indexOf('}');
-                    if (br >= 0) rest = rest.substring(0, br).trim();
+                if (lnIdx >= 0) {
+                    String rest = line.substring(lnIdx + 9)
+                        .replace("{", "").replace("}", "").trim();
                     if (!rest.isEmpty()) result.names.put(currentLang, rest);
                 }
                 continue;
             }
 
             if (lower.startsWith("langname=") && currentLang != null) {
-                String rest = line.substring(9).trim();
-                int br = rest.indexOf('}');
-                if (br >= 0) rest = rest.substring(0, br).trim();
+                String rest = line.substring(9)
+                    .replace("{", "").replace("}", "").trim();
                 if (!rest.isEmpty()) result.names.put(currentLang, rest);
                 continue;
             }
@@ -465,12 +461,12 @@ public final class Lang {
             if ("}".equals(line) && currentMap != null && currentLang != null) {
                 if (!currentMap.isEmpty()) result.strings.put(currentLang, currentMap);
                 currentLang = null;
-                currentMap  = null;
+                currentMap = null;
                 continue;
             }
 
             if (currentMap != null && lower.startsWith("textid=")) {
-                int eq  = line.indexOf('=');
+                int eq = line.indexOf('=');
                 int br1 = line.indexOf('[', eq);
                 int br2 = line.lastIndexOf(']');
                 if (eq >= 0 && br1 > eq && br2 > br1) {
@@ -484,13 +480,8 @@ public final class Lang {
         return result;
     }
 
-    // ========================================================================
-    // STRINGS DE MiNA — Fallback en español
-    // ========================================================================
-
     private static final Map<Integer, String> FALLBACK = new HashMap<Integer, String>();
     static {
-        // ---------- MainActivity ----------
         FALLBACK.put(1000, "MiNA");
         FALLBACK.put(1001, "Asistente personal para Android");
         FALLBACK.put(1002, "Comprobando...");
@@ -507,13 +498,13 @@ public final class Lang {
         FALLBACK.put(1013, "MiNA - v0.5");
         FALLBACK.put(1014, "Cómo funciona");
         FALLBACK.put(1015, "1. Establece MiNA como asistente.\n2. Mantén pulsado inicio.\n3. Di un comando.");
-
-        // ---------- Selector de idioma ----------
         FALLBACK.put(1050, "Seleccionar idioma");
         FALLBACK.put(1051, "Idioma actual: %s");
         FALLBACK.put(1052, "Cancelar");
-
-        // ---------- AssistantActivity ----------
+        FALLBACK.put(1053, "Cerrar");
+        FALLBACK.put(1054, "Cargando idiomas...");
+        FALLBACK.put(1055, "No se pudieron cargar los idiomas");
+        FALLBACK.put(1056, "Reintentar");
         FALLBACK.put(1100, "Pulsa el orbe para hablar");
         FALLBACK.put(1101, "Reconocimiento de voz no disponible");
         FALLBACK.put(1102, "Escuchando");
@@ -524,8 +515,6 @@ public final class Lang {
         FALLBACK.put(1107, "intent: %s");
         FALLBACK.put(1108, "Tú");
         FALLBACK.put(1109, "MiNA");
-
-        // ---------- Voice / TTS ----------
         FALLBACK.put(1150, "Falta permiso de micrófono");
         FALLBACK.put(1151, "No te entendí");
         FALLBACK.put(1152, "No escuché nada");
@@ -540,8 +529,6 @@ public final class Lang {
         FALLBACK.put(1161, "Error de grabación");
         FALLBACK.put(1162, "No se pudo abrir el micrófono");
         FALLBACK.put(1163, "Error %d");
-
-        // ---------- CommandRouter ----------
         FALLBACK.put(1200, "No te entendí");
         FALLBACK.put(1201, "Hola, soy MiNA. ¿En qué te ayudo?");
         FALLBACK.put(1202, "Me llamo MiNA");

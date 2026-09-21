@@ -1,21 +1,26 @@
 package com.Lexus2026.MiNA;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.role.RoleManager;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
@@ -153,22 +158,161 @@ public class MainActivity extends Activity {
         return scroll;
     }
 
-    private void showLanguageDialog() {
-        final java.util.List<String> available = Lang.getAvailableLanguages();
-        final String[] codes = available.toArray(new String[0]);
-        String[] names = new String[codes.length];
-        for (int i = 0; i < codes.length; i++) names[i] = Lang.getDisplayName(codes[i]);
+    // =================================================================
+    // Diálogo flotante de idiomas
+    // =================================================================
 
-        new AlertDialog.Builder(this)
-			.setTitle(Lang.get(1050))
-			.setItems(names, new DialogInterface.OnClickListener() {
-				@Override public void onClick(DialogInterface d, int which) {
-					Lang.setLanguage(MainActivity.this, codes[which]);
+    private void showLanguageDialog() {
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCanceledOnTouchOutside(true);
+
+        final LinearLayout panel = Ui.column(this);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Ui.SURFACE);
+        bg.setCornerRadius(Ui.dp(this, 24));
+        panel.setBackground(bg);
+        int pad = Ui.dp(this, 20);
+        panel.setPadding(pad, pad, pad, pad);
+
+        final TextView title = Ui.text(this, Lang.get(1050), 20, Ui.TEXT, true);
+        panel.addView(title);
+
+        panel.addView(Ui.space(this, 6));
+
+        final TextView sub = Ui.body(this,
+									 Lang.f(1051, Lang.getDisplayName(Lang.getActiveLanguage())));
+        panel.addView(sub);
+
+        panel.addView(Ui.space(this, 16));
+
+        final LinearLayout listContainer = Ui.column(this);
+        panel.addView(listContainer, Ui.matchWrap());
+
+        panel.addView(Ui.space(this, 12));
+
+        Button cancel = Ui.button(this, Lang.get(1053), false);
+        cancel.setOnClickListener(new View.OnClickListener() {
+				@Override public void onClick(View v) { dialog.dismiss(); }
+			});
+        panel.addView(cancel, Ui.matchWrap());
+
+        // Rellenar la lista (o estado de carga / error)
+        final Runnable populate = new Runnable() {
+            @Override public void run() {
+                listContainer.removeAllViews();
+                List<String> langs = Lang.getAvailableLanguages();
+                String active = Lang.getActiveLanguage();
+
+                if (langs.isEmpty()) {
+                    TextView loading = Ui.text(MainActivity.this,
+											   Lang.get(1054), 14, Ui.TEXT_DIM, false);
+                    loading.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams lp = Ui.matchWrap();
+                    lp.topMargin = Ui.dp(MainActivity.this, 20);
+                    lp.bottomMargin = Ui.dp(MainActivity.this, 20);
+                    listContainer.addView(loading, lp);
+                    return;
+                }
+
+                for (String code : langs) {
+                    listContainer.addView(
+						buildLangRow(dialog, code, code.equals(active)));
+                }
+            }
+        };
+
+        final Lang.LangListListener listListener = new Lang.LangListListener() {
+            @Override public void onLanguagesChanged() {
+                runOnUiThread(populate);
+            }
+        };
+        Lang.addLangListListener(listListener);
+        dialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+				@Override public void onDismiss(android.content.DialogInterface d) {
+					Lang.removeLangListListener(listListener);
 				}
-			})
-			.setNegativeButton(Lang.get(1052), null)
-			.show();
+			});
+
+        populate.run();
+
+        dialog.setContentView(panel);
+
+        Window w = dialog.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(0x00000000));
+            int width = (int)(getResources().getDisplayMetrics().widthPixels * 0.88f);
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.width = width;
+            lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            lp.gravity = Gravity.CENTER;
+            lp.dimAmount = 0.65f;
+            w.setAttributes(lp);
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
+
+        dialog.show();
+
+        Window w2 = dialog.getWindow();
+        if (w2 != null) {
+            int width = (int)(getResources().getDisplayMetrics().widthPixels * 0.88f);
+            w2.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+        }
     }
+
+    private View buildLangRow(final Dialog dialog, final String code, boolean isActive) {
+        LinearLayout row = Ui.row(this);
+        LinearLayout.LayoutParams lp = Ui.matchWrap();
+        lp.bottomMargin = Ui.dp(this, 8);
+        row.setLayoutParams(lp);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(isActive ? 0xFF1E2430 : Ui.SURFACE_2);
+        bg.setCornerRadius(Ui.dp(this, 14));
+        if (isActive) bg.setStroke(Ui.dp(this, 2), Ui.ACCENT);
+        row.setBackground(bg);
+
+        int p = Ui.dp(this, 12);
+        row.setPadding(p, p, p, p);
+
+        TextView badge = Ui.text(this, code.toUpperCase(Locale.ROOT), 14,
+								 isActive ? Ui.ACCENT : Ui.TEXT_DIM, true);
+        badge.setGravity(Gravity.CENTER);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(Ui.SURFACE);
+        badgeBg.setCornerRadius(Ui.dp(this, 8));
+        badge.setBackground(badgeBg);
+        badge.setWidth(Ui.dp(this, 42));
+        badge.setHeight(Ui.dp(this, 42));
+        row.addView(badge);
+
+        TextView name = Ui.text(this, Lang.getDisplayName(code), 15, Ui.TEXT, true);
+        LinearLayout.LayoutParams nLp = new LinearLayout.LayoutParams(
+			0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        nLp.leftMargin = Ui.dp(this, 14);
+        row.addView(name, nLp);
+
+        if (isActive) {
+            TextView check = Ui.text(this, "✓", 18, Ui.ACCENT, true);
+            check.setGravity(Gravity.CENTER);
+            row.addView(check);
+        }
+
+        row.setOnClickListener(new View.OnClickListener() {
+				@Override public void onClick(View v) {
+					dialog.dismiss();
+					if (!code.equals(Lang.getActiveLanguage())) {
+						Lang.setLanguage(MainActivity.this, code);
+					}
+				}
+			});
+
+        return row;
+    }
+
+    // =================================================================
+    // Lógica
+    // =================================================================
 
     private void refreshStatus() {
         if (statusDot == null || statusText == null || statusHint == null) return;
