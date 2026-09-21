@@ -82,6 +82,15 @@ public final class Lang {
         "es", "en", "pt", "fr", "de", "it", "ja", "zh", "ru"
     };
 
+    // IDs reservados para datos estructurados dentro de lang.json.
+    // El único fallback hardcodeado es el español.
+    public static final int ID_EMERGENCY_NUMBER = 800;
+    public static final int ID_STOPWORDS       = 810;
+    public static final int ID_CITY_MARKERS    = 811;
+    public static final int ID_APP_MARKERS     = 812;
+    public static final int ID_DATE_FORMAT     = 813;
+    public static final int ID_SYNONYMS        = 814;
+
     public interface Listener { void onLanguageChanged(); }
     public interface LangListListener { void onLanguagesChanged(); }
 
@@ -106,9 +115,8 @@ public final class Lang {
     private static final Map<String, String> sPatterns = new HashMap<String, String>();
     private static final Map<String, Integer> sResponses = new HashMap<String, Integer>();
 
-    // ================================================================
-    // PALABRAS CLAVE POR ID
-    // ================================================================
+    private static volatile int sDataVersion = 0;
+
     private static final Map<String, Integer> KW_IDS =
 	new HashMap<String, Integer>();
     static {
@@ -194,72 +202,22 @@ public final class Lang {
         KW_IDS.put("que_comes",         385);
         KW_IDS.put("eres_gato",         386);
         KW_IDS.put("miau",              387);
-    }
-
-    private static final Map<String, String> MARCADORES_CIUDAD =
-	new HashMap<String, String>();
-    static {
-        MARCADORES_CIUDAD.put("es", " en , de , para , sobre ");
-        MARCADORES_CIUDAD.put("en", " in , of , for , at , near ");
-        MARCADORES_CIUDAD.put("pt", " em , de , para , sobre ");
-        MARCADORES_CIUDAD.put("fr", " a , en , de , pour , sur ");
-        MARCADORES_CIUDAD.put("de", " in , von , fur , auf ");
-        MARCADORES_CIUDAD.put("it", " a , in , di , per , su ");
-    }
-
-    private static final Map<String, String> MARCADORES_APP =
-	new HashMap<String, String>();
-    static {
-        MARCADORES_APP.put("es", "abre la app ,abrir la app ,abre ,abrir ,lanza ,lanzar ,inicia ,iniciar ");
-        MARCADORES_APP.put("en", "open the app ,open app ,open ,launch the ,launch ,start ");
-        MARCADORES_APP.put("pt", "abre a app ,abrir a app ,abre ,abrir ,lanca ,inicia ");
-        MARCADORES_APP.put("fr", "ouvre l'app ,ouvre ,lance ,demarre ");
-    }
-
-    private static final Map<String, String[]> STOP_WORDS =
-	new HashMap<String, String[]>();
-    static {
-        STOP_WORDS.put("es", new String[]{
-						   "por favor", "ahora", "hoy", "manana", "mañana", "gracias",
-						   "el", "la", "los", "las", "un", "una", "unos", "unas"
-					   });
-        STOP_WORDS.put("en", new String[]{
-						   "please", "now", "today", "tomorrow", "thanks", "thank you",
-						   "the", "a", "an", "some"
-					   });
-        STOP_WORDS.put("pt", new String[]{
-						   "por favor", "agora", "hoje", "amanha", "obrigado", "obrigada",
-						   "o", "a", "os", "as", "um", "uma"
-					   });
-        STOP_WORDS.put("fr", new String[]{
-						   "s'il vous plait", "maintenant", "aujourd'hui", "demain",
-						   "merci", "le", "la", "les", "un", "une"
-					   });
-        STOP_WORDS.put("de", new String[]{
-						   "bitte", "jetzt", "heute", "morgen", "danke",
-						   "der", "die", "das", "ein", "eine"
-					   });
-        STOP_WORDS.put("it", new String[]{
-						   "per favore", "adesso", "oggi", "domani", "grazie",
-						   "il", "la", "i", "le", "un", "una"
-					   });
-        STOP_WORDS.put("ja", new String[]{"please", "now", "today", "tomorrow", "thanks"});
-        STOP_WORDS.put("zh", new String[]{"please", "now", "today", "tomorrow", "thanks"});
-        STOP_WORDS.put("ru", new String[]{"please", "now", "today", "tomorrow", "thanks"});
-    }
-
-    private static final Map<String, String> DATE_FORMATS =
-	new HashMap<String, String>();
-    static {
-        DATE_FORMATS.put("es", "EEEE d 'de' MMMM 'de' yyyy");
-        DATE_FORMATS.put("en", "EEEE, MMMM d, yyyy");
-        DATE_FORMATS.put("pt", "EEEE, d 'de' MMMM 'de' yyyy");
-        DATE_FORMATS.put("fr", "EEEE d MMMM yyyy");
-        DATE_FORMATS.put("de", "EEEE, d. MMMM yyyy");
-        DATE_FORMATS.put("it", "EEEE d MMMM yyyy");
-        DATE_FORMATS.put("ja", "yyyy'年'M'月'd'日' EEEE");
-        DATE_FORMATS.put("zh", "yyyy'年'M'月'd'日' EEEE");
-        DATE_FORMATS.put("ru", "EEEE, d MMMM yyyy");
+        KW_IDS.put("recordar_evento",   500);
+        KW_IDS.put("mi_agenda",         501);
+        KW_IDS.put("traducir",          502);
+        KW_IDS.put("raiz_cuadrada",     503);
+        KW_IDS.put("porcentaje",        504);
+        KW_IDS.put("elevar",            505);
+        KW_IDS.put("capital_pais",      506);
+        KW_IDS.put("receta",            507);
+        KW_IDS.put("significado",       508);
+        KW_IDS.put("sinonimo",          509);
+        KW_IDS.put("estado_animo",      510);
+        KW_IDS.put("buenos_deseos",     511);
+        KW_IDS.put("buen_fin_semana",   512);
+        KW_IDS.put("broma",             513);
+        KW_IDS.put("piropo",            514);
+        KW_IDS.put("te_extrano",        515);
     }
 
     private Lang() { }
@@ -352,7 +310,7 @@ public final class Lang {
 
     public static String get(int id) {
         String s = sStrings.get(id);
-        if (s != null) return s;
+        if (s != null && !s.isEmpty()) return s;
         String fb = FALLBACK.get(id);
         return fb != null ? fb : "[" + id + "]";
     }
@@ -378,18 +336,74 @@ public final class Lang {
         return l;
     }
 
+    // -----------------------------------------------------------------
+    // Accesores a datos estructurados (todos traducibles vía lang.json).
+    // El único fallback hardcodeado es español.
+    // -----------------------------------------------------------------
+
     public static String getDateFormat() {
-        String fmt = DATE_FORMATS.get(sActiveLang);
-        if (fmt != null) return fmt;
-        fmt = DATE_FORMATS.get("es");
-        return fmt != null ? fmt : "EEEE d 'de' MMMM 'de' yyyy";
+        String fmt = get(ID_DATE_FORMAT);
+        if (fmt == null || fmt.isEmpty() || isPlaceholder(fmt)) {
+            return "EEEE d 'de' MMMM 'de' yyyy";
+        }
+        return fmt;
+    }
+
+    public static String getEmergencyNumber() {
+        String n = get(ID_EMERGENCY_NUMBER);
+        if (n == null || n.isEmpty() || isPlaceholder(n)) return "911";
+        return n;
     }
 
     public static String[] getStopWords() {
-        String[] sw = STOP_WORDS.get(sActiveLang);
-        if (sw != null) return sw;
-        String[] esSw = STOP_WORDS.get("es");
-        return esSw != null ? esSw : new String[0];
+        return splitCsv(get(ID_STOPWORDS));
+    }
+
+    public static String[] getCityMarkers() {
+        String[] out = splitCsv(get(ID_CITY_MARKERS));
+        if (out.length == 0) {
+            return new String[]{"en", "de", "para", "sobre"};
+        }
+        return out;
+    }
+
+    public static String[] getAppMarkers() {
+        String[] out = splitCsv(get(ID_APP_MARKERS));
+        if (out.length == 0) {
+            return new String[]{"abre la app", "abrir la app",
+                "abre", "abrir", "lanza", "lanzar", "inicia", "iniciar"};
+        }
+        return out;
+    }
+
+    public static Map<String, String> getSynonyms() {
+        Map<String, String> out = new HashMap<String, String>();
+        String csv = get(ID_SYNONYMS);
+        if (csv == null || csv.isEmpty() || isPlaceholder(csv)) return out;
+        String[] parts = csv.split(",");
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i].trim();
+            if (p.isEmpty()) continue;
+            int eq = p.indexOf('=');
+            if (eq <= 0 || eq >= p.length() - 1) continue;
+            String k = normalize(p.substring(0, eq).trim());
+            String v = normalize(p.substring(eq + 1).trim());
+            if (!k.isEmpty() && !v.isEmpty()) out.put(k, v);
+        }
+        return out;
+    }
+
+    private static String[] splitCsv(String csv) {
+        if (csv == null || csv.isEmpty() || isPlaceholder(csv)) {
+            return new String[0];
+        }
+        String[] parts = csv.split(",");
+        List<String> out = new ArrayList<String>(parts.length);
+        for (int i = 0; i < parts.length; i++) {
+            String t = parts[i].trim();
+            if (!t.isEmpty()) out.add(t);
+        }
+        return out.toArray(new String[0]);
     }
 
     public static List<String> getAvailableLanguages() {
@@ -445,7 +459,19 @@ public final class Lang {
     public static void refreshLanguages() { fetchRemoteAsync(); }
 
     // ================================================================
-    // MATCHING POR PALABRAS CLAVE MULTILINGÜE
+    // API PARA EL MOTOR NLP
+    // ================================================================
+
+    public static int getDataVersion() { return sDataVersion; }
+
+    public static synchronized Map<Integer, String> snapshotAllStrings() {
+        return new HashMap<Integer, String>(sStrings);
+    }
+
+    static Map<String, Integer> getKwIds() { return KW_IDS; }
+
+    // ================================================================
+    // MATCHING POR PALABRAS CLAVE
     // ================================================================
 
     static String getKeywords(String concept) {
@@ -458,7 +484,6 @@ public final class Lang {
         return v;
     }
 
-    /** Devuelve todas las palabras clave por concepto en el idioma activo. */
     public static Map<String, String> getAllConceptKeywords() {
         Map<String, String> out = new HashMap<String, String>();
         for (String concept : KW_IDS.keySet()) {
@@ -468,7 +493,6 @@ public final class Lang {
         return out;
     }
 
-    /** Devuelve el ID de respuesta asociado a un intent. */
     public static Integer getResponseIdForIntent(String intentId) {
         return currentResponseId(intentId);
     }
@@ -490,7 +514,7 @@ public final class Lang {
         return false;
     }
 
-    private static String normalize(String s) {
+    static String normalize(String s) {
         if (s == null) return "";
         String n = Normalizer.normalize(s, Normalizer.Form.NFD);
         n = n.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
@@ -534,8 +558,6 @@ public final class Lang {
     }
 
     private static IntentMatch matchByKeywords(String q) {
-
-        // ---------- PERSONALIDAD DE MiNA (la gata) ----------
         if (has(q, "quien_eres"))
             return new IntentMatch("who_are_you", 376, new HashMap<String, String>());
         if (has(q, "que_te_gusta"))
@@ -549,7 +571,77 @@ public final class Lang {
         if (has(q, "miau"))
             return new IntentMatch("say_meow", 381, new HashMap<String, String>());
 
-        // ---------- CLIMA ----------
+        if (has(q, "recordar_evento"))
+            return new IntentMatch("create_event", 120, new HashMap<String, String>());
+        if (has(q, "mi_agenda"))
+            return new IntentMatch("show_calendar", 121, new HashMap<String, String>());
+        if (has(q, "traducir")) {
+            String txt = extraerTextoBusqueda(q);
+            Map<String, String> p = new HashMap<String, String>();
+            if (txt != null) p.put("text", txt);
+            return new IntentMatch("translate", 116, p);
+        }
+        if (has(q, "raiz_cuadrada")) {
+            String n = extraerNumeroSimple(q);
+            if (n != null) {
+                Map<String, String> p = new HashMap<String, String>();
+                p.put("expr", "raiz de " + n);
+                return new IntentMatch("calculate", 86, p);
+            }
+        }
+        if (has(q, "porcentaje")) {
+            String expr = extraerExpresionPorcentaje(q);
+            if (expr != null) {
+                Map<String, String> p = new HashMap<String, String>();
+                p.put("expr", expr);
+                return new IntentMatch("calculate", 86, p);
+            }
+        }
+        if (has(q, "elevar")) {
+            String expr = extraerExpresionPotencia(q);
+            if (expr != null) {
+                Map<String, String> p = new HashMap<String, String>();
+                p.put("expr", expr);
+                return new IntentMatch("calculate", 86, p);
+            }
+        }
+        if (has(q, "capital_pais")) {
+            String pais = extraerCiudad(q);
+            Map<String, String> p = new HashMap<String, String>();
+            if (pais != null) p.put("q", "capital de " + pais);
+            return new IntentMatch("search_google", 77, p);
+        }
+        if (has(q, "receta")) {
+            String plato = extraerTextoBusqueda(q);
+            Map<String, String> p = new HashMap<String, String>();
+            if (plato != null) p.put("q", "receta " + plato);
+            return new IntentMatch("search_google", 77, p);
+        }
+        if (has(q, "significado")) {
+            String palabra = extraerTextoBusqueda(q);
+            Map<String, String> p = new HashMap<String, String>();
+            if (palabra != null) p.put("q", "significado " + palabra);
+            return new IntentMatch("search_google", 77, p);
+        }
+        if (has(q, "sinonimo")) {
+            String palabra = extraerTextoBusqueda(q);
+            Map<String, String> p = new HashMap<String, String>();
+            if (palabra != null) p.put("q", "sinonimos de " + palabra);
+            return new IntentMatch("search_google", 77, p);
+        }
+        if (has(q, "estado_animo"))
+            return new IntentMatch("how_are_you", 146, new HashMap<String, String>());
+        if (has(q, "buen_fin_semana"))
+            return new IntentMatch("greeting", 49, new HashMap<String, String>());
+        if (has(q, "buenos_deseos"))
+            return new IntentMatch("greeting", 49, new HashMap<String, String>());
+        if (has(q, "broma"))
+            return new IntentMatch("tell_joke", 157, new HashMap<String, String>());
+        if (has(q, "piropo"))
+            return new IntentMatch("love_you", 150, new HashMap<String, String>());
+        if (has(q, "te_extrano"))
+            return new IntentMatch("love_you", 150, new HashMap<String, String>());
+
         if (has(q, "tiempo")) {
             String ciudad = extraerCiudad(q);
             if (ciudad != null) {
@@ -564,7 +656,6 @@ public final class Lang {
         if (has(q, "fecha"))
             return new IntentMatch("date", 54, new HashMap<String, String>());
 
-        // ---------- LINTERNA ----------
         if (has(q, "linterna")) {
             if (has(q, "apagar"))
                 return new IntentMatch("flashlight_off", 56, new HashMap<String, String>());
@@ -573,11 +664,9 @@ public final class Lang {
             return new IntentMatch("flashlight", 55, new HashMap<String, String>());
         }
 
-        // ---------- BATERÍA ----------
         if (has(q, "bateria"))
             return new IntentMatch("battery", 97, new HashMap<String, String>());
 
-        // ---------- VOLUMEN ----------
         if (has(q, "volumen")) {
             boolean subir = has(q, "subir");
             boolean bajar = has(q, "bajar");
@@ -601,7 +690,6 @@ public final class Lang {
             if (bajar) return new IntentMatch("volume_down", 61, new HashMap<String, String>());
         }
 
-        // ---------- BRILLO ----------
         if (has(q, "brillo")) {
             if (has(q, "maximo"))
                 return new IntentMatch("brightness_max", 126, new HashMap<String, String>());
@@ -613,7 +701,6 @@ public final class Lang {
                 return new IntentMatch("brightness_down", 125, new HashMap<String, String>());
         }
 
-        // ---------- MÚSICA ----------
         if (has(q, "musica")) {
             if (has(q, "pausa"))
                 return new IntentMatch("music_pause", 162, new HashMap<String, String>());
@@ -626,7 +713,6 @@ public final class Lang {
             return new IntentMatch("now_playing", 166, new HashMap<String, String>());
         }
 
-        // ---------- ALARMA / TEMPORIZADOR ----------
         if (has(q, "alarma")) {
             Map<String, String> p = new HashMap<String, String>();
             String hora = extraerHora(q);
@@ -644,7 +730,6 @@ public final class Lang {
         if (has(q, "ver_alarmas"))
             return new IntentMatch("show_alarms", 107, new HashMap<String, String>());
 
-        // ---------- COMUNICACIÓN ----------
         if (has(q, "llamar")) {
             Map<String, String> p = new HashMap<String, String>();
             String num = extraerNumero(q);
@@ -658,7 +743,6 @@ public final class Lang {
         if (has(q, "emergencia"))
             return new IntentMatch("emergency", 110, new HashMap<String, String>());
 
-        // ---------- CÁMARA / GALERÍA ----------
         if (has(q, "camara") || has(q, "selfie")) {
             if (has(q, "selfie"))
                 return new IntentMatch("selfie", 72, new HashMap<String, String>());
@@ -669,7 +753,6 @@ public final class Lang {
         if (has(q, "galeria") && !has(q, "buscar"))
             return new IntentMatch("gallery", 112, new HashMap<String, String>());
 
-        // ---------- MAPAS ----------
         if (has(q, "ubicacion"))
             return new IntentMatch("location", 113, new HashMap<String, String>());
         if (has(q, "mapa")) {
@@ -679,7 +762,6 @@ public final class Lang {
             return new IntentMatch("map", 115, p);
         }
 
-        // ---------- BUSCAR ----------
         if (has(q, "buscar")) {
             String q2 = extraerTextoBusqueda(q);
             Map<String, String> p = new HashMap<String, String>();
@@ -700,7 +782,6 @@ public final class Lang {
             return new IntentMatch("search_google", 77, p);
         }
 
-        // ---------- ABRIR APP ----------
         if (q.startsWith("abre ") || q.startsWith("abrir ")
             || q.startsWith("lanza ") || q.startsWith("inicia ")
             || q.startsWith("open ") || q.startsWith("launch ")
@@ -713,7 +794,6 @@ public final class Lang {
             }
         }
 
-        // ---------- NOTAS ----------
         if (has(q, "nota")) {
             if (q.contains("borra") || q.contains("limpia")
                 || q.contains("delete") || q.contains("clear"))
@@ -730,7 +810,6 @@ public final class Lang {
             }
         }
 
-        // ---------- LISTAS ----------
         if (has(q, "lista")) {
             boolean shopping = has(q, "compra");
             if (has(q, "agregar_lista")) {
@@ -747,7 +826,6 @@ public final class Lang {
             return new IntentMatch(shopping ? "list_show_shopping" : "list_show_todo", 144, new HashMap<String, String>());
         }
 
-        // ---------- CÁLCULO ----------
         if (has(q, "calcula")) {
             String expr = extraerExpresion(q);
             if (expr != null) {
@@ -757,7 +835,6 @@ public final class Lang {
             }
         }
 
-        // ---------- ALEATORIO ----------
         if (has(q, "dado"))
             return new IntentMatch("dice", 91, new HashMap<String, String>());
         if (has(q, "moneda"))
@@ -769,13 +846,11 @@ public final class Lang {
         if (has(q, "contrasena"))
             return new IntentMatch("random_password", 209, new HashMap<String, String>());
 
-        // ---------- CHISTES / DATOS ----------
         if (has(q, "chiste"))
             return new IntentMatch("tell_joke", 157, new HashMap<String, String>());
         if (has(q, "dato_curioso"))
             return new IntentMatch("random_fact", 213, new HashMap<String, String>());
 
-        // ---------- HELP / SALUDO / DESPEDIDA / GRACIAS ----------
         if (has(q, "ayuda"))
             return new IntentMatch("help", 87, new HashMap<String, String>());
         if (has(q, "saludo"))
@@ -785,7 +860,6 @@ public final class Lang {
         if (has(q, "gracias"))
             return new IntentMatch("thanks", 51, new HashMap<String, String>());
 
-        // ---------- INFO DEL DISPOSITIVO ----------
         if (has(q, "ram"))
             return new IntentMatch("ram", 103, new HashMap<String, String>());
         if (has(q, "almacenamiento"))
@@ -812,25 +886,17 @@ public final class Lang {
         return null;
     }
 
-    private static String[] marcadores(String map, String key, String fallback) {
-        String s = map.equals("ciudad")
-            ? MARCADORES_CIUDAD.get(sActiveLang)
-            : MARCADORES_APP.get(sActiveLang);
-        if (s == null && !"es".equals(sActiveLang)) {
-            s = map.equals("ciudad")
-                ? MARCADORES_CIUDAD.get("es")
-                : MARCADORES_APP.get("es");
-        }
-        if (s == null) s = fallback;
-        return s.split(",");
-    }
+    // -----------------------------------------------------------------
+    // Extracción de parámetros usando marcadores traducibles
+    // -----------------------------------------------------------------
 
     private static String extraerCiudad(String q) {
-        String[] marcadores = marcadores("ciudad", "ciudad", " en , de , para , sobre ");
+        String[] marcadores = getCityMarkers();
+        if (marcadores == null || marcadores.length == 0) return null;
         int mejorIdx = -1;
         String mejorMarcador = null;
-        for (String m : marcadores) {
-            String mm = m.trim();
+        for (int i = 0; i < marcadores.length; i++) {
+            String mm = marcadores[i].trim();
             if (mm.isEmpty()) continue;
             String marcador = " " + mm + " ";
             int idx = q.lastIndexOf(marcador);
@@ -871,27 +937,61 @@ public final class Lang {
         return sb.length() > 0 ? sb.toString() : null;
     }
 
+    private static String extraerNumeroSimple(String q) {
+        Matcher m = Pattern.compile("(\\d+(?:[.,]\\d+)?)").matcher(q);
+        if (m.find()) return m.group(1).replace(",", ".");
+        return null;
+    }
+
+    private static String extraerExpresionPorcentaje(String q) {
+        Matcher m = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:%|por ciento|percent)\\s*(?:de|of)\\s*(\\d+(?:[.,]\\d+)?)").matcher(q);
+        if (m.find()) {
+            String a = m.group(1).replace(",", ".");
+            String b = m.group(2).replace(",", ".");
+            return a + " % " + b;
+        }
+        return null;
+    }
+
+    private static String extraerExpresionPotencia(String q) {
+        Matcher m = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:elevado a|a la|potencia de|power)\\s*(\\d+(?:[.,]\\d+)?)").matcher(q);
+        if (m.find()) {
+            String a = m.group(1).replace(",", ".");
+            String b = m.group(2).replace(",", ".");
+            return a + " ^ " + b;
+        }
+        return null;
+    }
+
     private static String extraerTextoBusqueda(String q) {
         String t = q;
         String[] verbos = {"busca en ", "buscar en ", "busca ", "buscar ", "googlea ", "buscame ",
-			"search in ", "search for ", "search ", "look up ", "find "};
+            "search in ", "search for ", "search ", "look up ", "find ",
+            "traduce ", "traducir ", "significa ", "significado de ", "sinonimo de ", "sinonimos de "};
         for (String v : verbos) { if (t.startsWith(v)) { t = t.substring(v.length()); break; } }
         String[] plats = {"youtube ", "wikipedia ", "play store ", "playstore ",
-			"amazon ", "mercado libre ", "steam ", "netflix ",
-			"spotify ", "reddit ", "twitter ", "tiktok ",
-			"on youtube ", "on wikipedia ", "on amazon ", "on steam ",
-			"on netflix ", "on spotify ", "on reddit "};
+            "amazon ", "mercado libre ", "steam ", "netflix ",
+            "spotify ", "reddit ", "twitter ", "tiktok ",
+            "on youtube ", "on wikipedia ", "on amazon ", "on steam ",
+            "on netflix ", "on spotify ", "on reddit "};
         for (String p : plats) { if (t.startsWith(p)) { t = t.substring(p.length()); break; } }
         t = t.trim();
         return t.isEmpty() ? null : t;
     }
 
     private static String extraerApp(String q) {
+        String[] markers = getAppMarkers();
+        if (markers == null || markers.length == 0) return null;
         String t = q;
-        String[] verbos = {"abre la app ", "abrir la app ", "abre ", "abrir ",
-			"lanza ", "inicia ", "open the app ", "open app ",
-			"open ", "launch the ", "launch ", "start "};
-        for (String v : verbos) { if (t.startsWith(v)) { t = t.substring(v.length()); break; } }
+        for (int i = 0; i < markers.length; i++) {
+            String mm = markers[i].trim();
+            if (mm.isEmpty()) continue;
+            String prefix = mm + " ";
+            if (t.startsWith(prefix)) {
+                t = t.substring(prefix.length());
+                break;
+            }
+        }
         t = t.trim();
         return t.isEmpty() ? null : t;
     }
@@ -899,8 +999,8 @@ public final class Lang {
     private static String extraerTextoNota(String q) {
         String t = q;
         String[] verbos = {"anota que ", "anota ", "apunta que ", "apunta ",
-			"guarda una nota que ", "guarda una nota ", "nueva nota ",
-			"note that ", "note ", "save a note ", "new note "};
+            "guarda una nota que ", "guarda una nota ", "nueva nota ",
+            "note that ", "note ", "save a note ", "new note "};
         for (String v : verbos) { if (t.startsWith(v)) { t = t.substring(v.length()); break; } }
         t = t.trim();
         return t.isEmpty() ? null : t;
@@ -909,7 +1009,7 @@ public final class Lang {
     private static String extraerExpresion(String q) {
         String t = q;
         String[] verbos = {"calcula ", "calculame ", "cuanto es ", "cuanto son ",
-			"calculate ", "compute ", "how much is "};
+            "calculate ", "compute ", "how much is "};
         for (String v : verbos) { if (t.startsWith(v)) { t = t.substring(v.length()); break; } }
         t = t.trim();
         return t.isEmpty() ? null : t;
@@ -1016,6 +1116,7 @@ public final class Lang {
             }
             if (map.isEmpty()) return false;
             synchronized (sStrings) { sStrings.clear(); sStrings.putAll(map); }
+            sDataVersion++;
             loadPatternsFromPrefs(langId);
             return true;
         } catch (Exception e) { return false; }
@@ -1054,6 +1155,7 @@ public final class Lang {
         synchronized (sStrings)  { sStrings.clear();  sStrings.putAll(FALLBACK); }
         synchronized (sPatterns) { sPatterns.clear(); sPatterns.putAll(FALLBACK_PATTERNS); }
         synchronized (sResponses){ sResponses.clear();sResponses.putAll(FALLBACK_RESPONSES); }
+        sDataVersion++;
     }
 
     private static void fetchRemoteAsync() {
@@ -1148,7 +1250,7 @@ public final class Lang {
                 int eq = line.indexOf('=');
                 int brace = line.indexOf('{', eq);
                 String segment = (brace > eq) ? line.substring(eq + 1, brace).trim()
-					: line.substring(eq + 1).trim();
+                    : line.substring(eq + 1).trim();
                 int sp = segment.indexOf(' ');
                 String code = (sp > 0) ? segment.substring(0, sp).trim() : segment;
                 code = code.replace("{", "").replace("}", "").trim();
@@ -1232,7 +1334,7 @@ public final class Lang {
     }
 
     // ========================================================================
-    // FALLBACK EN ESPAÑOL
+    // FALLBACK EN ESPAÑOL (único fallback hardcodeado)
     // ========================================================================
 
     private static final Map<Integer, String> FALLBACK = new HashMap<Integer, String>();
@@ -1250,7 +1352,7 @@ public final class Lang {
         FALLBACK.put(11, "Probar asistente");
         FALLBACK.put(12, "Idioma");
         FALLBACK.put(13, "Cambiar idioma");
-        FALLBACK.put(14, "MiNA - v0.9");
+        FALLBACK.put(14, "MiNA - v1.0");
         FALLBACK.put(15, "Cómo funciona");
         FALLBACK.put(16, "1. Establece MiNA como asistente.\n2. Mantén pulsado inicio.\n3. Di un comando.");
         FALLBACK.put(17, "Seleccionar idioma");
@@ -1537,97 +1639,95 @@ public final class Lang {
         FALLBACK.put(298, "modulo");
         FALLBACK.put(299, "raiz de ");
 
-        // ----- 300-387: palabras clave por concepto -----
-        FALLBACK.put(300, "tiempo,clima,temperatura,grados,llover,lluvia,soleado,nublado,llueve,pronostico");
-        FALLBACK.put(301, "hora,horas");
-        FALLBACK.put(302, "fecha,que dia,dia de hoy,dia es hoy,calendario");
-        FALLBACK.put(303, "linterna,flash,flashlight");
-        FALLBACK.put(304, "apaga,desactiva,quita,apagar,desactivar,quitar,apagame");
-        FALLBACK.put(305, "enciende,prende,activa,encender,prender,activar,prendeme");
-        FALLBACK.put(306, "bateria,pila,carga");
-        FALLBACK.put(307, "volumen");
-        FALLBACK.put(308, "maximo,maxima");
-        FALLBACK.put(309, "silencio,silencia,mute,mutea,silenciar,silencioso");
-        FALLBACK.put(310, "sube,subir,mas,arriba,aumenta,aumentar");
-        FALLBACK.put(311, "baja,bajar,menos,abajo,disminuye,disminuir");
-        FALLBACK.put(312, "notificacion,notificaciones");
-        FALLBACK.put(313, "llamada,llamadas");
-        FALLBACK.put(314, "alarma,despiertame,despertar,despertador");
-        FALLBACK.put(315, "brillo,pantalla,luminosidad");
-        FALLBACK.put(316, "automatico,auto,automatica");
-        FALLBACK.put(317, "musica,cancion,tema,reproduciendo,sonando,reproductor");
-        FALLBACK.put(318, "pausa,pausar,para,parar,detener,detene");
-        FALLBACK.put(319, "reanuda,reanudar,continua,continuar,sigue,seguir,reproduce");
-        FALLBACK.put(320, "siguiente,salta,saltar,pasa,pasar,proxima");
-        FALLBACK.put(321, "anterior,vuelve,volver,atras,previa");
-        FALLBACK.put(322, "temporizador,timer,cuenta atras,cuenta regresiva");
-        FALLBACK.put(323, "cronometro");
-        FALLBACK.put(324, "mis alarmas,ver alarmas,lista de alarmas");
-        FALLBACK.put(325, "llama,llamar,marca,marcar,telefonea,dispara,llamalo");
-        FALLBACK.put(326, "contacto,contactos,agenda");
-        FALLBACK.put(327, "llamadas recientes,ultimas llamadas,registro de llamadas");
-        FALLBACK.put(328, "emergencia,emergencias,911");
-        FALLBACK.put(329, "camara,foto,fotografia,saca una foto,haz una foto");
-        FALLBACK.put(330, "selfie,foto frontal");
-        FALLBACK.put(331, "video,graba,grabar,filma,filmar");
-        FALLBACK.put(332, "galeria,album,fotos,fotografia");
-        FALLBACK.put(333, "busca,buscar,googlea,buscame,encuentra,consulta");
-        FALLBACK.put(334, "donde estoy,mi ubicacion,ubicacion actual");
-        FALLBACK.put(335, "mapa,maps,mapas");
-        FALLBACK.put(336, "youtube");
-        FALLBACK.put(337, "wikipedia");
-        FALLBACK.put(338, "play store,playstore,tienda de apps");
-        FALLBACK.put(339, "amazon");
-        FALLBACK.put(340, "mercado libre,mercadolibre");
-        FALLBACK.put(341, "steam");
-        FALLBACK.put(342, "netflix");
-        FALLBACK.put(343, "spotify");
+        FALLBACK.put(300, "tiempo,clima,temperatura,grados,llover,lluvia,soleado,nublado,llueve,pronostico,climita,calor,frio,humedad,viento,como esta el dia,que dia hace,va a llover,esta lloviendo,hace sol,hace frio,hace calor");
+        FALLBACK.put(301, "hora,horas,que hora es,me dice la hora,dime la hora,hora actual,horita");
+        FALLBACK.put(302, "fecha,que dia,que dia es hoy,dia de hoy,dia es hoy,calendario,fecha actual,hoy que dia es,que fecha es");
+        FALLBACK.put(303, "linterna,flash,flashlight,torch,lampara,luz");
+        FALLBACK.put(304, "apaga,desactiva,quita,apagar,desactivar,quitar,apagame,apagalo,desconecta,desconectar,deten,detener");
+        FALLBACK.put(305, "enciende,prende,activa,encender,prender,activar,prendeme,prendelo,conecta,conectar");
+        FALLBACK.put(306, "bateria,pila,carga,cargador,nivel de bateria,porcentaje de bateria,cuanta bateria");
+        FALLBACK.put(307, "volumen,sonido,audio,vol,altavoz,parlante");
+        FALLBACK.put(308, "maximo,maxima,al tope,al max,completo,lleno");
+        FALLBACK.put(309, "silencio,silencia,mute,mutea,silenciar,silencioso,silencio total");
+        FALLBACK.put(310, "sube,subir,mas,arriba,aumenta,aumentar,subele,subile,incrementa,incrementar");
+        FALLBACK.put(311, "baja,bajar,menos,abajo,disminuye,disminuir,bajale,bajala,reduce,reducir");
+        FALLBACK.put(312, "notificacion,notificaciones,aviso,avisos,alerta,alertas");
+        FALLBACK.put(313, "llamada,llamadas,llamadita,telefonica");
+        FALLBACK.put(314, "alarma,despiertame,despertar,despertador,alarmita,poner alarma,pon alarma");
+        FALLBACK.put(315, "brillo,pantalla,luminosidad,luz de pantalla,brillito");
+        FALLBACK.put(316, "automatico,auto,automatica,automaticamente,solo,por si solo");
+        FALLBACK.put(317, "musica,cancion,tema,reproduciendo,sonando,reproductor,melodia,temita,cancioncita");
+        FALLBACK.put(318, "pausa,pausar,para,parar,detener,detene,pausala,parala");
+        FALLBACK.put(319, "reanuda,reanudar,continua,continuar,sigue,seguir,reproduce,reproducir,dale play,play");
+        FALLBACK.put(320, "siguiente,salta,saltar,pasa,pasar,proxima,proximo,next,siguiente tema");
+        FALLBACK.put(321, "anterior,vuelve,volver,atras,previa,atrasar,retrocede,retroceder");
+        FALLBACK.put(322, "temporizador,timer,cuenta atras,cuenta regresiva,reloj regresivo");
+        FALLBACK.put(323, "cronometro,crono,stopwatch,reloj");
+        FALLBACK.put(324, "mis alarmas,ver alarmas,lista de alarmas,que alarmas tengo,alarmas puestas");
+        FALLBACK.put(325, "llama,llamar,marca,marcar,telefonea,dispara,llamalo,llamala,comunica,comunicar");
+        FALLBACK.put(326, "contacto,contactos,agenda,agendita,libreta,agenda de contactos");
+        FALLBACK.put(327, "llamadas recientes,ultimas llamadas,registro de llamadas,historial de llamadas");
+        FALLBACK.put(328, "emergencia,emergencias,911,auxilio,socorro,ayuda urgente");
+        FALLBACK.put(329, "camara,foto,fotografia,saca una foto,haz una foto,tomar foto,fotito,fotico,sacame una foto");
+        FALLBACK.put(330, "selfie,foto frontal,foto de frente,autofoto");
+        FALLBACK.put(331, "video,graba,grabar,filma,filmar,grabar video,videito");
+        FALLBACK.put(332, "galeria,album,fotos,fotografia,imagenes,galeria de fotos");
+        FALLBACK.put(333, "busca,buscar,googlea,buscame,encuentra,consulta,busque,busqueda");
+        FALLBACK.put(334, "donde estoy,mi ubicacion,ubicacion actual,donde me encuentro,mi posicion");
+        FALLBACK.put(335, "mapa,maps,mapas,mapita,cartografia");
+        FALLBACK.put(336, "youtube,yutub,yt,video de youtube");
+        FALLBACK.put(337, "wikipedia,wiki,la enciclopedia");
+        FALLBACK.put(338, "play store,playstore,tienda de apps,google play,market");
+        FALLBACK.put(339, "amazon,amazonas");
+        FALLBACK.put(340, "mercado libre,mercadolibre,mercadito,mel");
+        FALLBACK.put(341, "steam,la tienda de juegos");
+        FALLBACK.put(342, "netflix,netfli,la plataforma de series");
+        FALLBACK.put(343, "spotify,la musica de spotify");
         FALLBACK.put(344, "reddit");
-        FALLBACK.put(345, "twitter,x.com");
-        FALLBACK.put(346, "tiktok");
-        FALLBACK.put(347, "imagenes,imagen,fotos de");
-        FALLBACK.put(348, "vuelos,vuelo,boletos de avion,pasajes");
-        FALLBACK.put(349, "nota,notas,anota,anotar,apunta,apuntar");
-        FALLBACK.put(350, "lista de la compra,lista de compras,lista de tareas,lista de pendientes");
-        FALLBACK.put(351, "compra,compras,super,supermercado");
-        FALLBACK.put(352, "anade,añade,agrega,agregar,sumale");
-        FALLBACK.put(353, "calcula,calculame,calcular,cuanto es,cuanto son");
-        FALLBACK.put(354, "dado,dados");
-        FALLBACK.put(355, "moneda,cara o cruz,cara o sello,lanza una moneda");
-        FALLBACK.put(356, "numero aleatorio,numero al azar");
-        FALLBACK.put(357, "color aleatorio");
-        FALLBACK.put(358, "contrasena,password,clave");
-        FALLBACK.put(359, "ayuda,puedes hacer,comandos,opciones,sabes hacer");
-        FALLBACK.put(360, "hola,buenas,hey,buenos dias,buenas tardes,buenas noches,que tal");
-        FALLBACK.put(361, "adios,chao,hasta luego,nos vemos,cierra,cerrar,bye");
-        FALLBACK.put(362, "gracias");
-        FALLBACK.put(363, "ram,memoria,memoria ram");
-        FALLBACK.put(364, "almacenamiento,espacio,disco,memoria interna");
-        FALLBACK.put(365, "modelo,que telefono,que movil,marca del telefono");
-        FALLBACK.put(366, "version de android,que android,android tengo");
-        FALLBACK.put(367, "mi ip,direccion ip,ip local");
-        FALLBACK.put(368, "operador,compania,operadora,mi red movil");
+        FALLBACK.put(345, "twitter,x.com,x,la red social");
+        FALLBACK.put(346, "tiktok,tik tok,la app de videos");
+        FALLBACK.put(347, "imagenes,imagen,fotos de,fotitos");
+        FALLBACK.put(348, "vuelos,vuelo,boletos de avion,pasajes,billetes de avion");
+        FALLBACK.put(349, "nota,notas,anota,anotar,apunta,apuntar,notita,recordatorio");
+        FALLBACK.put(350, "lista de la compra,lista de compras,lista de tareas,lista de pendientes,listita");
+        FALLBACK.put(351, "compra,compras,super,supermercado,almacen");
+        FALLBACK.put(352, "anade,añade,agrega,agregar,sumale,suma,apunta a la lista");
+        FALLBACK.put(353, "calcula,calculame,calcular,cuanto es,cuanto son,cuantos,cuantas");
+        FALLBACK.put(354, "dado,dados,tira un dado,lanza un dado");
+        FALLBACK.put(355, "moneda,cara o cruz,cara o sello,lanza una moneda,tira una moneda");
+        FALLBACK.put(356, "numero aleatorio,numero al azar,numero random");
+        FALLBACK.put(357, "color aleatorio,color random,color al azar");
+        FALLBACK.put(358, "contrasena,password,clave,pass,contraseñita");
+        FALLBACK.put(359, "ayuda,puedes hacer,comandos,opciones,sabes hacer,que haces,que podes hacer,que puedes,capacidades");
+        FALLBACK.put(360, "hola,buenas,hey,buenos dias,buenas tardes,buenas noches,que tal,saludos,hola que tal,que onda,holis");
+        FALLBACK.put(361, "adios,chao,hasta luego,nos vemos,cierra,cerrar,bye,chau,chaito,hasta pronto,me voy");
+        FALLBACK.put(362, "gracias,te lo agradezco,muchas gracias,mil gracias,gracias che,graciela");
+        FALLBACK.put(363, "ram,memoria,memoria ram,memoria libre");
+        FALLBACK.put(364, "almacenamiento,espacio,disco,memoria interna,espacio libre");
+        FALLBACK.put(365, "modelo,que telefono,que movil,marca del telefono,modelo del dispositivo");
+        FALLBACK.put(366, "version de android,que android,android tengo,version android");
+        FALLBACK.put(367, "mi ip,direccion ip,ip local,cual es mi ip");
+        FALLBACK.put(368, "operador,compania,operadora,mi red movil,empresa telefonica");
         FALLBACK.put(369, "uptime,cuanto llevo encendido,tiempo encendido");
-        FALLBACK.put(370, "resolucion,pantalla,tamano de pantalla");
-        FALLBACK.put(371, "red wifi,ssid,wifi,a que red");
+        FALLBACK.put(370, "resolucion,pantalla,tamano de pantalla,info de pantalla");
+        FALLBACK.put(371, "red wifi,ssid,wifi,a que red,red inalambrica");
         FALLBACK.put(372, "kernel");
         FALLBACK.put(373, "sim,tarjeta sim");
-        FALLBACK.put(374, "chiste,chistes,cuentame un chiste,dime un chiste,cuentame otro chiste,otro chiste,humor,gracioso,sabes algun chiste");
-        FALLBACK.put(375, "dato curioso,datos curiosos,curiosidad,curiosidades,cuentame algo interesante,dime algo interesante,sabes algo curioso,sabes algo interesante");
+        FALLBACK.put(374, "chiste,chistes,cuentame un chiste,dime un chiste,cuentame otro chiste,otro chiste,humor,gracioso,sabes algun chiste,algo gracioso");
+        FALLBACK.put(375, "dato curioso,datos curiosos,curiosidad,curiosidades,cuentame algo interesante,dime algo interesante,sabes algo curioso,sabes algo interesante,algo interesante");
         FALLBACK.put(376, "Soy MiNA, una gata. Bueno, técnicamente soy un asistente de voz, pero me gusta pensar que soy una gata pelotuda.");
         FALLBACK.put(377, "El pescado, miau. Y dormir la siesta panza arriba con la lengua afuera.");
         FALLBACK.put(378, "Siempre tengo hambre. Sobre todo si hay atún.");
         FALLBACK.put(379, "Pescado, atún y algún premio de vez en cuando. Miau.");
         FALLBACK.put(380, "Sí, soy una gata. Miau.");
         FALLBACK.put(381, "Miau.");
-        FALLBACK.put(382, "quien eres,que eres,quien sos,que sos");
-        FALLBACK.put(383, "que te gusta,que te gusta comer,que te gusta hacer");
-        FALLBACK.put(384, "tienes hambre,quieres comer,quieres atun");
-        FALLBACK.put(385, "que comes,que comes tu,de que te alimentas");
-        FALLBACK.put(386, "eres un gato,eres una gata,eres gato,eres gata");
-        FALLBACK.put(387, "miau,miau miau");
+        FALLBACK.put(382, "quien eres,que eres,quien sos,que sos,como te llamas,tu nombre,cual es tu nombre");
+        FALLBACK.put(383, "que te gusta,que te gusta comer,que te gusta hacer,que te agrada,que te encanta");
+        FALLBACK.put(384, "tienes hambre,quieres comer,quieres atun,estas hambrienta,tenes hambre");
+        FALLBACK.put(385, "que comes,que comes tu,de que te alimentas,que te alimenta");
+        FALLBACK.put(386, "eres un gato,eres una gata,eres gato,eres gata,sos un gato,sos una gata");
+        FALLBACK.put(387, "miau,miau miau,hace miau,di miau");
 
-        // ----- 400-408: plantillas del motor NLP -----
         FALLBACK.put(400, "No estoy segura, pero creo que te refieres a %s.");
         FALLBACK.put(401, "¿Quisiste decir %s?");
         FALLBACK.put(402, "¿Me lo repetís?");
@@ -1638,7 +1738,6 @@ public final class Lang {
         FALLBACK.put(407, "Escuché «%s», pero no estoy segura de qué querés.");
         FALLBACK.put(408, "Perdón, no te entendí.");
 
-        // ----- 410-475: descripciones de acción (una por concepto) -----
         FALLBACK.put(410, "consultar el clima");
         FALLBACK.put(411, "saber la hora");
         FALLBACK.put(412, "saber la fecha");
@@ -1705,6 +1804,147 @@ public final class Lang {
         FALLBACK.put(473, "decirte qué como");
         FALLBACK.put(474, "decirte si soy una gata");
         FALLBACK.put(475, "hacer miau");
+        FALLBACK.put(476, "crear un evento en el calendario");
+        FALLBACK.put(477, "abrir tu agenda");
+        FALLBACK.put(478, "traducir un texto");
+        FALLBACK.put(479, "calcular una raíz cuadrada");
+        FALLBACK.put(480, "calcular un porcentaje");
+        FALLBACK.put(481, "calcular una potencia");
+        FALLBACK.put(482, "buscar la capital de un país");
+        FALLBACK.put(483, "buscar una receta de cocina");
+        FALLBACK.put(484, "buscar el significado de una palabra");
+        FALLBACK.put(485, "buscar sinónimos de una palabra");
+        FALLBACK.put(486, "preguntarme cómo estoy");
+        FALLBACK.put(487, "desearte buenos deseos");
+        FALLBACK.put(488, "desearte buen fin de semana");
+        FALLBACK.put(489, "contarte una broma");
+        FALLBACK.put(490, "decirte un piropo");
+        FALLBACK.put(491, "decirte que te extraño");
+
+        FALLBACK.put(500, "recuerdame,recordar,recuerdame que,pon un recordatorio,recordatorio,recuerdamelo,recordame");
+        FALLBACK.put(501, "mi agenda,mis eventos,que tengo hoy,que tengo manana,mi calendario,eventos de hoy,eventos de manana");
+        FALLBACK.put(502, "traduce,traducir,traduccion,como se dice,como se dice en,traduce al ingles,traduce al espanol");
+        FALLBACK.put(503, "raiz cuadrada,raiz de,sqrt,raiz");
+        FALLBACK.put(504, "porcentaje,por ciento,cuanto es el,porciento,tanto por ciento");
+        FALLBACK.put(505, "elevado a,a la potencia,potencia de,cuadrado de,cubo de");
+        FALLBACK.put(506, "capital de,cual es la capital,cual es la capital de");
+        FALLBACK.put(507, "receta,receta de,como se hace,como cocinar,como preparar,receta para");
+        FALLBACK.put(508, "significado,significa,que significa,que quiere decir,definicion de");
+        FALLBACK.put(509, "sinonimo,sinonimos,sinonimo de,sinonimos de");
+        FALLBACK.put(510, "como estas,como te va,como andas,que tal estas,como te encuentras,como va todo");
+        FALLBACK.put(511, "buenos deseos,que tengas buen dia,que tengas buen,que te vaya bien,buena suerte");
+        FALLBACK.put(512, "buen fin de semana,buen fin,buen finde,buen fin de");
+        FALLBACK.put(513, "broma,bromita,cuentame una broma,dime una broma,algo divertido");
+        FALLBACK.put(514, "piropo,piropito,dime un piropo,piropeame");
+        FALLBACK.put(515, "te extrano,te extrano mucho,te echo de menos,me haces falta");
+
+        FALLBACK.put(516, "si,sí,claro,dale,ok,okey,okay,vale,correcto,exacto,eso,eso es,asi es,así es,por supuesto,obvio,de acuerdo,acepto,confirmo,afirmativo,sip,sisi,sisisi,yep,yeah,yup,sure,of course,va,bueno,bien,hagamoslo,hazlo,hacelo,adelante,procede,vamos,claro que si,sim,oui,certo,ja,genau");
+        FALLBACK.put(517, "no,nope,nel,negativo,incorrecto,equivocado,no es eso,no era,nada que ver,para nada,jamas,jamás,nunca,tampoco,no gracias,no quiero,no me interesa,nop,nones,wrong,incorrect,never,not really,nao,não,non,faux,nein,falsch,nicht");
+        FALLBACK.put(518, "cancela,cancelar,olvidalo,olvídalo,olvidate,olvídate,dejalo,dejálo,nada,nada mas,nada más,salir,salte,stop,detente,deten,abortar,aborta,deja,cancel,forget it,never mind,nevermind,abort,quit,drop it,esquece,esqueça,annuler,oublie,annulla,dimentica,abbrechen,vergiss");
+        FALLBACK.put(519, "primera,primero,first,uno,1,la primera,el primero");
+        FALLBACK.put(520, "segunda,segundo,second,dos,2,la segunda,el segundo");
+        FALLBACK.put(521, "tercera,tercero,third,tres,3,la tercera,el tercero");
+
+        FALLBACK.put(700, "¿Podrías reformular la pregunta?");
+        FALLBACK.put(701, "No estoy segura de haber entendido bien.");
+        FALLBACK.put(702, "¿Podés darme más detalles?");
+        FALLBACK.put(703, "Mmm, no estoy segura.");
+        FALLBACK.put(704, "Estoy aquí para ayudarte.");
+        FALLBACK.put(705, "Puedo intentarlo de nuevo si querés.");
+        FALLBACK.put(706, "Decime de otra forma, por favor.");
+        FALLBACK.put(707, "Perdón, no llegué a entenderte.");
+        FALLBACK.put(708, "¿Me repetís eso?");
+        FALLBACK.put(709, "Creo que no te escuché bien.");
+        FALLBACK.put(710, "¿Podés decirlo de otra manera?");
+        FALLBACK.put(711, "Eso no lo tengo claro todavía.");
+        FALLBACK.put(712, "Todavía estoy aprendiendo, disculpá.");
+        FALLBACK.put(713, "¿Querés que intente otra cosa?");
+        FALLBACK.put(714, "¿Hay algo más en lo que pueda ayudarte?");
+        FALLBACK.put(715, "Estoy lista para lo que necesites.");
+        FALLBACK.put(716, "Decime qué necesitás.");
+        FALLBACK.put(717, "¿En qué más te puedo ayudar?");
+        FALLBACK.put(718, "Estoy acá si me necesitás.");
+        FALLBACK.put(719, "¿Te ayudo con algo más?");
+        FALLBACK.put(720, "Miau. No entendí eso.");
+        FALLBACK.put(721, "Mmm... intentá de nuevo.");
+        FALLBACK.put(722, "No capté bien, ¿me lo repetís?");
+        FALLBACK.put(723, "¿Podés ser más específico?");
+        FALLBACK.put(724, "No tengo respuesta para eso todavía.");
+        FALLBACK.put(725, "Creo que querés %s, o tal vez %s. ¿Cuál de las dos?");
+        FALLBACK.put(726, "Sigo sin entenderte.");
+        FALLBACK.put(727, "Eso me supera por ahora.");
+        FALLBACK.put(728, "¿Me das una pista?");
+        FALLBACK.put(729, "¿A qué te referís exactamente?");
+        FALLBACK.put(730, " o ");
+        FALLBACK.put(731, "¿Podés explicármelo mejor?");
+        FALLBACK.put(732, "Creo que querés decir algo, pero no sé qué.");
+        FALLBACK.put(733, "¿Otra vez? No te entendí.");
+        FALLBACK.put(734, "Mi cerebrito gatuno no llegó a eso.");
+        FALLBACK.put(735, "Ni idea, che. Probá de nuevo.");
+        FALLBACK.put(736, "No sé, pero suena interesante.");
+        FALLBACK.put(737, "Estoy pensando... nope, no sé.");
+        FALLBACK.put(738, "Dame otra oportunidad, ¿sí?");
+        FALLBACK.put(739, "No entendí ni jota.");
+        FALLBACK.put(740, "Podés pedirme el clima, la hora,");
+        FALLBACK.put(741, "abrir apps, buscar en internet,");
+        FALLBACK.put(742, "poner alarmas, temporizadores,");
+        FALLBACK.put(743, "controlar el volumen o el brillo,");
+        FALLBACK.put(744, "y mucho más. ¿Qué necesitás?");
+        FALLBACK.put(745, "Vamos, animate, decime algo.");
+
+        // ----- 800+: datos estructurados (solo fallback español) -----
+        FALLBACK.put(800, "911");
+
+        FALLBACK.put(810,
+					 "por favor,ahora,hoy,manana,mañana,gracias,el,la,los,las,"
+					 + "un,una,unos,unas,de,del,al,y,o,que,como,para,por,"
+					 + "con,sin,mi,tu,su,me,te,se,a,en,lo");
+
+        FALLBACK.put(811, "en,de,para,sobre");
+
+        FALLBACK.put(812,
+					 "abre la app,abrir la app,abre,abrir,lanza,lanzar,inicia,iniciar");
+
+        FALLBACK.put(813, "EEEE d 'de' MMMM 'de' yyyy");
+
+        FALLBACK.put(814,
+					 "prende=enciende,prender=encender,prendeme=enciende,prendelo=enciende,"
+					 + "activa=enciende,activar=encender,encienda=enciende,"
+					 + "apaga=desactiva,apagar=desactivar,apagame=desactiva,apagalo=desactiva,"
+					 + "desactiva=desactivar,quita=desactiva,quitar=desactivar,"
+					 + "pon=poner,pone=poner,coloca=poner,"
+					 + "dime=decir,deci=decir,decime=decir,cuentame=decir,contame=decir,"
+					 + "muestrame=mostrar,muestra=mostrar,ensename=mostrar,"
+					 + "busca=buscar,buscame=buscar,busque=buscar,consulta=buscar,"
+					 + "consulte=buscar,encuentra=buscar,encuentrame=buscar,"
+					 + "abre=abrir,abreme=abrir,abra=abrir,lanza=abrir,lanzar=abrir,"
+					 + "inicia=abrir,iniciar=abrir,arranca=abrir,arrancar=abrir,"
+					 + "comienza=abrir,comenzar=abrir,"
+					 + "cierra=cerrar,salir=cerrar,"
+					 + "deten=parar,detener=parar,para=parar,"
+					 + "tira=lanzar,tirar=lanzar,"
+					 + "sube=subir,aumenta=subir,aumentar=subir,incrementa=subir,"
+					 + "baja=bajar,disminuye=bajar,disminuir=bajar,reduce=bajar,reducir=bajar,"
+					 + "saca=tomar,sacar=tomar,toma=tomar,"
+					 + "haz=hacer,hacete=hacer,graba=grabar,"
+					 + "reproduce=reproducir,pausa=pausar,"
+					 + "reanuda=reanudar,continua=reanudar,continuar=reanudar,"
+					 + "sigue=reanudar,seguir=reanudar,"
+					 + "salta=saltar,pasa=saltar,vuelve=volver,"
+					 + "movil=telefono,celular=telefono,celu=telefono,smartphone=telefono,"
+					 + "foto=fotografia,fotito=fotografia,imagen=fotografia,fotico=fotografia,"
+					 + "cancion=musica,tema=musica,pista=musica,track=musica,"
+					 + "clima=tiempo,temperatura=tiempo,grados=tiempo,lluvia=tiempo,"
+					 + "lluvioso=tiempo,soleado=tiempo,nublado=tiempo,pronostico=tiempo,climita=tiempo,"
+					 + "agenda=calendario,cita=evento,reunion=evento,"
+					 + "despertador=alarma,timer=temporizador,cronos=cronometro,"
+					 + "app=aplicacion,programa=aplicacion,"
+					 + "navegador=internet,red=internet,web=internet,pagina=internet,sitio=internet,"
+					 + "sonido=volumen,audio=volumen,vol=volumen,"
+					 + "luminosidad=brillo,flash=linterna,"
+					 + "pila=bateria,carga=bateria,"
+					 + "memoria=ram,espacio=almacenamiento,disco=almacenamiento,"
+					 + "equipo=dispositivo,aparato=dispositivo,chisme=dispositivo");
     }
 
     private static final Map<String, String> FALLBACK_PATTERNS = new HashMap<String, String>();
@@ -1718,60 +1958,53 @@ public final class Lang {
     static {
         addIntent("who_are_you",        376, "quien eres|quien sos|que eres|que sos");
         addIntent("what_do_you_like",   377, "que te gusta|que te gusta comer|que te gusta hacer");
-        addIntent("are_you_hungry",     378, "tienes hambre|quieres comer|quieres atun");
+        addIntent("are_you_hungry",     378, "tienes hambre|quieres comer|quieres atun|estas hambrienta");
         addIntent("what_do_you_eat",    379, "que comes|de que te alimentas");
-        addIntent("are_you_a_cat",      380, "eres un gato|eres una gata|eres gato|eres gata");
-        addIntent("say_meow",           381, "miau|di miau|haz miau");
-
-        addIntent("greeting",        49, "hola|buenas|hey|buenos dias|buenas tardes|buenas noches");
+        addIntent("are_you_a_cat",      380, "eres un gato|eres una gata|eres gato|eres gata|sos un gato");
+        addIntent("say_meow",           381, "miau|di miau|haz miau|hace miau");
+        addIntent("greeting",        49, "hola|buenas|hey|buenos dias|buenas tardes|buenas noches|que tal|saludos|holis");
         addIntent("ask_name",        50, "como te llamas|tu nombre|cual es tu nombre");
-        addIntent("thanks",          51, "gracias|te lo agradezco");
-        addIntent("goodbye",         52, "adios|chao|hasta luego|cierra|cerrar|nos vemos");
-        addIntent("help",            87, "que puedes hacer|ayuda|comandos|opciones|que sabes hacer");
-        addIntent("how_are_you",    146, "como estas|que tal estas|como andas|que tal");
+        addIntent("thanks",          51, "gracias|te lo agradezco|muchas gracias");
+        addIntent("goodbye",         52, "adios|chao|hasta luego|cierra|cerrar|nos vemos|chau|bye");
+        addIntent("help",            87, "que puedes hacer|ayuda|comandos|opciones|que sabes hacer|que podes hacer|capacidades");
+        addIntent("how_are_you",    146, "como estas|que tal estas|como andas|que tal|como te va");
         addIntent("what_doing",     149, "que haces|que estas haciendo");
-        addIntent("love_you",       150, "te quiero|te amo");
+        addIntent("love_you",       150, "te quiero|te amo|piropo|piropeame|te extrano");
         addIntent("insult",         151, "eres tonto|eres tonta|eres boba|eres bobo|eres idiota");
         addIntent("good_morning",   152, "buenos dias|buen dia");
         addIntent("good_night",     153, "buenas noches|buen descanso");
         addIntent("tell_fact",      154, "cuentame algo|dime algo|cuentame un dato|dime un dato|sabes algo interesante");
-        addIntent("tell_joke",      157, "chiste|cuentame un chiste|dime un chiste|sabes algun chiste");
+        addIntent("tell_joke",      157, "chiste|cuentame un chiste|dime un chiste|sabes algun chiste|broma|dime una broma");
         addIntent("are_you_ai",     161, "eres una ia|eres un robot|eres humana|eres real|eres una persona");
         addIntent("random_fact",    213, "dime un dato curioso|cuentame un dato|sabes algo curioso");
-
         addIntent("weather_city",     259, "que tiempo hace en {city}|que clima hace en {city}|el tiempo en {city}|el clima en {city}|como esta el tiempo en {city}|temperatura en {city}|va a llover en {city}|clima en {city}|tiempo en {city}|cual es el tiempo en {city}|cual es el clima en {city}");
-        addIntent("weather_here",     260, "que tiempo hace|que clima hace|como esta el tiempo|el tiempo|el clima|que temperatura hace|va a llover|esta lloviendo");
+        addIntent("weather_here",     260, "que tiempo hace|que clima hace|como esta el tiempo|el tiempo|el clima|que temperatura hace|va a llover|esta lloviendo|como esta el dia|que dia hace");
         addIntent("forecast_city",    264, "que tiempo hara manana en {city}|el clima manana en {city}|pronostico manana en {city}|el tiempo manana en {city}");
         addIntent("forecast_here",    265, "que tiempo hara manana|el clima manana|pronostico manana|el tiempo manana|va a llover manana");
-
-        addIntent("time",            53, "que hora es|la hora|dime la hora|hora es");
-        addIntent("date",            54, "que dia es hoy|fecha|hoy es|que fecha|dime la fecha");
-
+        addIntent("time",            53, "que hora es|la hora|dime la hora|hora es|que horas son");
+        addIntent("date",            54, "que dia es hoy|fecha|hoy es|que fecha|dime la fecha|que fecha es");
         addIntent("dice",            91, "tira un dado|lanza un dado|dado|dados|tira los dados");
         addIntent("coin",            92, "cara o cruz|cara o sello|lanza una moneda|tira una moneda");
-        addIntent("random_number",   94, "numero aleatorio|numero al azar|dime un numero");
+        addIntent("random_number",   94, "numero aleatorio|numero al azar|dime un numero|numero random");
         addIntent("choose",          96, "elige entre {opts}|escoge entre {opts}|decide entre {opts}|elige {opts}");
         addIntent("random_password",209, "genera una contrasena|dime una contrasena|contrasena aleatoria|genera contrasena de {n} caracteres");
         addIntent("random_uuid",    210, "genera un uuid|dime un uuid|identificador unico");
-        addIntent("random_color",   211, "color aleatorio|dime un color|genera un color");
-
-        addIntent("battery",         97, "bateria|nivel de bateria|cuanta bateria|cuanta pila");
+        addIntent("random_color",   211, "color aleatorio|dime un color|genera un color|color random");
+        addIntent("battery",         97, "bateria|nivel de bateria|cuanta bateria|cuanta pila|porcentaje de bateria");
         addIntent("device_model",   100, "modelo del dispositivo|que telefono|que movil|que modelo|modelo de telefono");
         addIntent("android_version",101, "version de android|que android|version android");
         addIntent("storage",        102, "espacio libre|cuanto espacio|almacenamiento libre");
         addIntent("ram",            103, "memoria libre|cuanta ram|memoria ram");
-        addIntent("ip",             104, "mi ip|direccion ip|cual es mi ip");
+        addIntent("ip",             104, "mi ip|direccion ip|cual es mi ip|ip local");
         addIntent("carrier",        105, "operador|que compania|que operadora|mi operador");
         addIntent("uptime",         218, "cuanto llevo encendido|uptime|tiempo encendido");
         addIntent("screen_info",    219, "resolucion de pantalla|tamano de pantalla|info de pantalla");
         addIntent("network_info",   220, "a que red estoy conectado|nombre de la red wifi|ssid|red wifi");
         addIntent("kernel_version", 221, "version del kernel|kernel");
         addIntent("sim_info",       222, "info de la sim|estado de la sim|mi sim");
-
         addIntent("flashlight_on",   55, "enciende la linterna|prende la linterna|activa la linterna|linterna encendida");
         addIntent("flashlight_off",  56, "apaga la linterna|desactiva la linterna|quita la linterna|linterna apagada");
         addIntent("flashlight",      55, "linterna|flash");
-
         addIntent("volume_up",       60, "sube el volumen|subir volumen|mas volumen|volumen arriba");
         addIntent("volume_down",     61, "baja el volumen|bajar volumen|menos volumen|volumen abajo");
         addIntent("volume_mute",     62, "silencia|silencio|mutea|modo silencio|silenciar");
@@ -1782,51 +2015,42 @@ public final class Lang {
         addIntent("volume_call_down",  172, "baja el volumen de llamadas|menos volumen llamadas");
         addIntent("volume_alarm_up",   173, "sube el volumen de alarma|mas volumen alarma");
         addIntent("volume_alarm_down", 174, "baja el volumen de alarma|menos volumen alarma");
-
         addIntent("music_pause",    162, "pausa la musica|pausar musica|para la musica|pausa");
         addIntent("music_resume",   163, "reanuda la musica|reanudar musica|continua la musica|sigue la musica");
         addIntent("music_next",     164, "siguiente cancion|salta la cancion|siguiente tema|pasa la cancion");
         addIntent("music_prev",     165, "cancion anterior|anterior cancion|vuelve la cancion|tema anterior");
         addIntent("now_playing",    167, "que esta sonando|que cancion es|que se esta reproduciendo");
-
         addIntent("brightness_up",  124, "sube el brillo|subir brillo|mas brillo|brillo arriba");
         addIntent("brightness_down",125, "baja el brillo|bajar brillo|menos brillo|brillo abajo");
         addIntent("brightness_max", 126, "brillo al maximo|brillo maximo");
         addIntent("brightness_auto",123, "brillo automatico|brillo auto|activa brillo automatico");
-
         addIntent("airplane_on",      177, "activa modo avion|enciende modo avion|activa el modo avion");
         addIntent("airplane_off",     178, "desactiva modo avion|apaga modo avion|desactiva el modo avion");
         addIntent("airplane_settings",179, "modo avion|ajustes de modo avion");
         addIntent("nfc_settings",     180, "ajustes de nfc|configurar nfc|abre nfc");
         addIntent("gps_settings",     181, "ajustes de gps|configurar gps|configurar ubicacion");
-
         addIntent("alarm",           66, "pon alarma a las {hora}|pon una alarma a las {hora}|despiertame a las {hora}|alarma a las {hora}|pon alarma {hora}");
         addIntent("timer",           68, "pon temporizador de {dur}|temporizador de {dur}|timer de {dur}|temporizador {dur}");
         addIntent("stopwatch",      106, "cronometro|abre el cronometro|ver cronometro");
         addIntent("show_alarms",    107, "ver alarmas|mis alarmas|lista de alarmas|que alarmas tengo");
-
         addIntent("call",            71, "llama al {num}|llamar al {num}|marca el {num}|marcar {num}|dispara al {num}|telefonea al {num}");
         addIntent("contacts",       108, "ver contactos|abre contactos|agenda|mi agenda|abrir agenda");
         addIntent("recent_calls",   109, "llamadas recientes|ultimas llamadas|registro de llamadas");
         addIntent("emergency",      110, "emergencias|llama a emergencias|numero de emergencia");
-
         addIntent("camera",          72, "abre la camara|abrir camara|saca una foto|haz una foto|tomar foto|camara|abre camara");
         addIntent("selfie",          72, "saca una selfie|hazte una selfie|selfie|foto frontal");
         addIntent("record_video",   111, "graba un video|grabar video|graba video|grabar un video");
         addIntent("gallery",        112, "abre la galeria|abrir galeria|mis fotos|ver fotos|abre galeria");
-
         addIntent("location",       113, "donde estoy|mi ubicacion|ubicacion actual");
         addIntent("navigate",       114, "navega a {dest}|navegar a {dest}|como llego a {dest}|indicaciones a {dest}|ruta a {dest}");
         addIntent("map",            115, "mapa de {place}|ver mapa de {place}|muestrame el mapa de {place}|abre maps|abre mapas");
-
         addIntent("calculate",       86, "cuanto es {expr}|cuanto son {expr}|calcula {expr}|calculame {expr}");
-        addIntent("translate",      116, "traduce {text}|traducir {text}");
+        addIntent("translate",      116, "traduce {text}|traducir {text}|traduce al ingles {text}|traduce al espanol {text}");
         addIntent("imc",            194, "calcula mi imc|mi imc|indice de masa corporal|imc con peso {peso} y altura {altura}");
         addIntent("average",        196, "promedio de {nums}|media de {nums}|calcula el promedio de {nums}");
         addIntent("max_min",        198, "maximo y minimo de {nums}|mayor y menor de {nums}");
         addIntent("sum_list",       199, "suma {nums}|suma estos numeros {nums}|sumar {nums}");
         addIntent("product_list",   200, "producto de {nums}|multiplica {nums}");
-
         addIntent("text_upper",     182, "pon en mayusculas {text}|convierte a mayusculas {text}|mayusculas {text}");
         addIntent("text_lower",     182, "pon en minusculas {text}|convierte a minusculas {text}|minusculas {text}");
         addIntent("text_reverse",   182, "invierte el texto {text}|invertir {text}|al reves {text}");
@@ -1836,7 +2060,6 @@ public final class Lang {
         addIntent("decimal_to_binary", 188, "pasa {n} a binario|binario de {n}|{n} en binario");
         addIntent("decimal_to_hex",    189, "pasa {n} a hexadecimal|hexadecimal de {n}|{n} en hexadecimal");
         addIntent("prime_check",       190, "es primo {n}|{n} es primo|comprueba si {n} es primo");
-
         addIntent("search_youtube",   76, "busca en youtube {q}|buscar en youtube {q}|youtube busca {q}|en youtube {q}");
         addIntent("search_wikipedia",117, "busca en wikipedia {q}|wikipedia {q}|en wikipedia {q}");
         addIntent("search_images",   118, "imagenes de {q}|busca imagenes de {q}|fotos de {q}");
@@ -1851,32 +2074,25 @@ public final class Lang {
         addIntent("search_twitter",  246, "busca en twitter {q}|twitter {q}");
         addIntent("search_tiktok",   247, "busca en tiktok {q}|tiktok {q}");
         addIntent("search_flights",  240, "busca vuelos {q}|vuelos a {q}|vuelos para {q}");
-
         addIntent("find_gas_station", 235, "gasolineras cercanas|busca gasolineras|cerca gasolineras|donde hay una gasolinera");
         addIntent("find_pharmacy",    236, "farmacias cercanas|busca farmacias|cerca farmacias|donde hay una farmacia");
         addIntent("find_restaurant",  237, "restaurantes cercanos|busca restaurantes|cerca restaurantes|donde comer");
         addIntent("find_hospital",    238, "hospitales cercanos|busca hospitales|cerca hospitales|donde hay un hospital");
-
         addIntent("track_package",   239, "rastrea el paquete {num}|rastrear {num}|sigue el paquete {num}");
-
-        addIntent("create_event",   120, "crea un evento|crear evento|nuevo evento|agrega un evento");
-        addIntent("show_calendar",  121, "mi agenda|ver agenda|mis eventos|que tengo hoy");
-
+        addIntent("create_event",   120, "crea un evento|crear evento|nuevo evento|agrega un evento|recuerdame que|recordatorio");
+        addIntent("show_calendar",  121, "mi agenda|ver agenda|mis eventos|que tengo hoy|eventos de hoy|que tengo manana");
         addIntent("note_add",       225, "anota {texto}|guarda una nota {texto}|apunta {texto}|nueva nota {texto}");
         addIntent("note_list",      226, "mis notas|lista de notas|ver notas|muestra las notas");
         addIntent("note_clear",     228, "borra las notas|limpia las notas|borrar todas las notas");
         addIntent("note_read",      230, "lee la nota {n}|muestra la nota {n}|nota numero {n}");
-
         addIntent("list_add_shopping", 141, "anade {item} a la lista de la compra|agrega {item} a la lista de la compra|anade a la lista de la compra {item}|agrega a la lista de la compra {item}");
         addIntent("list_add_todo",     141, "anade {item} a la lista de tareas|agrega {item} a la lista de tareas|anade a la lista de tareas {item}|agrega a la lista de tareas {item}");
         addIntent("list_clear_shopping",142, "borra la lista de la compra|limpia la lista de la compra|vacia la lista de la compra");
         addIntent("list_clear_todo",    142, "borra la lista de tareas|limpia la lista de tareas|vacia la lista de tareas");
         addIntent("list_show_shopping", 144, "que hay en la lista de la compra|muestra la lista de la compra|lee la lista de la compra");
         addIntent("list_show_todo",     144, "que hay en la lista de tareas|muestra la lista de tareas|lee la lista de tareas");
-
         addIntent("launch_app",      78, "abre {app}|abrir {app}|lanza {app}|inicia {app}|abre la app {app}|abrir la app {app}");
         addIntent("open_url",        78, "abre {url}|abrir {url}|navega a {url}");
-
         addIntent("conv_kmh_mph",   248, "kmh a mph|kilometros por hora a millas");
         addIntent("conv_mph_kmh",   249, "mph a kmh|millas por hora a kilometros");
         addIntent("conv_oz_g",      250, "onzas a gramos");
@@ -1887,5 +2103,15 @@ public final class Lang {
         addIntent("conv_gal_l",     255, "galones a litros");
         addIntent("conv_yd_m",      256, "yardas a metros");
         addIntent("conv_m_yd",      257, "metros a yardas");
+        addIntent("capital_pais", 482, "capital de {city}|cual es la capital de {city}|la capital de {city}");
+        addIntent("receta",       483, "receta de {text}|como se hace {text}|como cocinar {text}|receta para {text}");
+        addIntent("significado",  484, "significa {text}|que significa {text}|significado de {text}");
+        addIntent("sinonimo",     485, "sinonimo de {text}|sinonimos de {text}");
+        addIntent("estado_animo", 486, "como estas|como te va|como andas|que tal estas|como te encuentras");
+        addIntent("buenos_deseos",487, "que tengas buen dia|que te vaya bien|buena suerte|buen dia te deseo");
+        addIntent("buen_fin_semana", 488, "buen fin de semana|buen finde|buen fin de");
+        addIntent("broma",        489, "cuentame una broma|dime una broma|sabes una broma|tenes una broma");
+        addIntent("piropo",       490, "dime un piropo|piropeame|tirate un piropo|decime un piropo");
+        addIntent("te_extrano",   491, "te extrano|te extrano mucho|te echo de menos|me haces falta");
     }
 }

@@ -28,11 +28,13 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.URLEncoder;
+import java.text.Normalizer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -62,6 +64,21 @@ class CommandRouter {
     private static final int KEYCODE_MEDIA_PLAY     = 126;
     private static final int KEYCODE_MEDIA_NEXT     = 87;
     private static final int KEYCODE_MEDIA_PREVIOUS = 88;
+
+    // ============================================================
+    // Estado multi-turno (todo dentro del router)
+    // ============================================================
+    private static final int PENDING_NONE    = 0;
+    private static final int PENDING_CONFIRM = 1;
+    private static final int PENDING_CHOOSE  = 2;
+    private static final long PENDING_TTL_MS = 90000L;
+
+    private int     pendingType = PENDING_NONE;
+    private String  pendingOriginalQuery;
+    private String  pendingIntentId;
+    private int     pendingResponseId;
+    private List<String> pendingAlternatives;
+    private long    pendingCreatedAt;
 
     private final Context ctx;
     private final WeatherEngine weather;
@@ -94,29 +111,55 @@ class CommandRouter {
         this.nlp = new NlpEngine();
     }
 
+    // ================================================================
+    // ROUTING
+    // ================================================================
+
     Response route(String raw) {
         if (raw == null) return Response.speak(Lang.get(48));
         String q = raw.toLowerCase(Locale.ROOT).trim();
         if (q.isEmpty()) return Response.speak(Lang.get(48));
 
+        // 1) Multi-turno: resolver si hay contexto pendiente
+        Response pendingResolved = tryResolvePending(raw);
+        if (pendingResolved != null) return pendingResolved;
+
+        // 2) Patrones de Lang
         Lang.IntentMatch m = Lang.matchIntent(q);
         if (m != null) {
             Response r = dispatch(m, q);
-            if (r != null) return r;
+            if (r != null) {
+                clearPending();
+                return r;
+            }
         }
 
-        // Fallback: motor NLP básico
+        // 3) NLP por conceptos
         NlpEngine.Result nr = nlp.analyze(q);
         if (nr.confidence >= NlpEngine.T_CONFIDENT) {
             Lang.IntentMatch guess = nlp.toIntentMatch(nr);
             if (guess != null) {
                 Response r = dispatch(guess, q);
-                if (r != null) return r;
+                if (r != null) {
+                    clearPending();
+                    return r;
+                }
             }
         }
-        if (nr.confidence >= NlpEngine.T_HINT) {
-            return Response.speak(nlp.formulateHint(nr));
+
+        // 4) Media confianza → guardar contexto y preguntar
+        if (nr.concept != null && nr.confidence >= NlpEngine.T_HINT) {
+            String hint = nlp.formulateHint(nr);
+            if (nr.alternatives != null && !nr.alternatives.isEmpty()
+                && nr.confidence < 0.40) {
+                setPendingChoose(raw, nr);
+            } else {
+                setPendingConfirm(raw, nr);
+            }
+            return Response.speak(hint);
         }
+
+        // 5) Desconocido
         return Response.speak(nlp.formulateUnknown(q));
     }
 
@@ -130,6 +173,201 @@ class CommandRouter {
 				}
 			}, "CommandRouter").start();
     }
+
+    // ================================================================
+    // MULTI-TURNO
+    // ================================================================
+
+    private void clearPending() {
+        pendingType = PENDING_NONE;
+        pendingOriginalQuery = null;
+        pendingIntentId = null;
+        pendingResponseId = 0;
+        pendingAlternatives = null;
+        pendingCreatedAt = 0L;
+    }
+
+    private boolean hasPending() {
+        if (pendingType == PENDING_NONE) return false;
+        if (System.currentTimeMillis() - pendingCreatedAt > PENDING_TTL_MS) {
+            clearPending();
+            return false;
+        }
+        return true;
+    }
+
+    private void setPendingConfirm(String original, NlpEngine.Result nr) {
+        Lang.IntentMatch im = nlp.toIntentMatch(nr);
+        if (im == null) return;
+        pendingType = PENDING_CONFIRM;
+        pendingOriginalQuery = original;
+        pendingIntentId = im.id;
+        pendingResponseId = im.responseId;
+        pendingAlternatives = null;
+        pendingCreatedAt = System.currentTimeMillis();
+    }
+
+    private void setPendingChoose(String original, NlpEngine.Result nr) {
+        Lang.IntentMatch im = nlp.toIntentMatch(nr);
+        if (im == null) return;
+        pendingType = PENDING_CHOOSE;
+        pendingOriginalQuery = original;
+        pendingIntentId = im.id;
+        pendingResponseId = im.responseId;
+        pendingAlternatives = (nr.alternatives != null)
+            ? new ArrayList<String>(nr.alternatives)
+            : new ArrayList<String>();
+        pendingCreatedAt = System.currentTimeMillis();
+    }
+
+    private Response tryResolvePending(String raw) {
+        if (!hasPending()) return null;
+
+        // Cancelar siempre gana
+        if (matchesWordList(raw, 518, 2)) {
+            clearPending();
+            return Response.speak(Lang.get(193));
+        }
+
+        if (pendingType == PENDING_CONFIRM) {
+            if (matchesWordList(raw, 516, 3)) {
+                String intentId = pendingIntentId;
+                int respId = pendingResponseId;
+                String original = pendingOriginalQuery;
+                clearPending();
+                return executeIntent(intentId, respId, original);
+            }
+            if (matchesWordList(raw, 517, 3)) {
+                clearPending();
+                return Response.speak(Lang.get(193));
+            }
+        }
+
+        if (pendingType == PENDING_CHOOSE) {
+            List<String> alts = pendingAlternatives;
+            if (alts != null && !alts.isEmpty()) {
+                String nq = normalizeDialogue(raw);
+
+                // 1) match exacto / contenido
+                for (int i = 0; i < alts.size(); i++) {
+                    String alt = alts.get(i);
+                    String an = normalizeDialogue(alt);
+                    if (an.isEmpty()) continue;
+                    if (an.equals(nq) || nq.contains(an) || an.contains(nq)) {
+                        String original = pendingOriginalQuery;
+                        clearPending();
+                        return executeConcept(alt, original);
+                    }
+                }
+
+                // 2) ordinales
+                int ord = -1;
+                if (matchesWordList(raw, 519, 3)) ord = 0;
+                else if (matchesWordList(raw, 520, 3)) ord = 1;
+                else if (matchesWordList(raw, 521, 3)) ord = 2;
+                if (ord >= 0 && ord < alts.size()) {
+                    String alt = alts.get(ord);
+                    String original = pendingOriginalQuery;
+                    clearPending();
+                    return executeConcept(alt, original);
+                }
+
+                // 3) tokens compartidos
+                String[] userToks = nq.split("\\s+");
+                if (userToks.length <= 4) {
+                    for (int i = 0; i < alts.size(); i++) {
+                        String alt = alts.get(i);
+                        String an = normalizeDialogue(alt);
+                        String[] altToks = an.split("\\s+");
+                        int shared = 0;
+                        for (int u = 0; u < userToks.length; u++) {
+                            String ut = userToks[u];
+                            if (ut.length() < 3) continue;
+                            for (int a = 0; a < altToks.length; a++) {
+                                String at = altToks[a];
+                                if (at.length() < 3) continue;
+                                if (at.equals(ut) || at.startsWith(ut) || ut.startsWith(at)) {
+                                    shared++;
+                                    break;
+                                }
+                            }
+                        }
+                        if (shared >= 1) {
+                            String original = pendingOriginalQuery;
+                            clearPending();
+                            return executeConcept(alt, original);
+                        }
+                    }
+                }
+            }
+        }
+
+        // No resolvió → procesar como comando nuevo
+        return null;
+    }
+
+    private Response executeIntent(String intentId, int respId, String originalQuery) {
+        if (intentId == null) return Response.speak(Lang.get(404));
+        Lang.IntentMatch m = new Lang.IntentMatch(
+            intentId, respId, new HashMap<String, String>());
+        String qq = (originalQuery != null)
+            ? originalQuery.toLowerCase(Locale.ROOT)
+            : "";
+        Response r = dispatch(m, qq);
+        if (r != null) return r;
+        if (respId > 0) return Response.speak(Lang.get(respId));
+        return Response.speak(Lang.get(404));
+    }
+
+    private Response executeConcept(String concept, String originalQuery) {
+        String intentId = NlpEngine.intentForConcept(concept);
+        if (intentId == null) return Response.speak(Lang.get(404));
+        Integer rid = Lang.getResponseIdForIntent(intentId);
+        return executeIntent(intentId, rid != null ? rid : 0, originalQuery);
+    }
+
+    /**
+     * Lee la lista de palabras del ID indicado (Lang) y comprueba si el
+     * input del usuario coincide con alguna. maxTokens permite aceptar
+     * frases cortas del tipo "si, dale" (el primer token basta).
+     */
+    private boolean matchesWordList(String userInput, int langId, int maxTokens) {
+        String words = Lang.get(langId);
+        if (words == null || words.isEmpty()) return false;
+        String nq = normalizeDialogue(userInput);
+        if (nq.isEmpty()) return false;
+
+        String[] parts = words.split(",");
+        // Comparación exacta contra la frase completa
+        for (int i = 0; i < parts.length; i++) {
+            String w = normalizeDialogue(parts[i].trim());
+            if (w.isEmpty()) continue;
+            if (w.equals(nq)) return true;
+        }
+        // Frase corta: aceptar si el primer token coincide
+        String[] userToks = nq.split("\\s+");
+        if (userToks.length <= maxTokens) {
+            for (int i = 0; i < parts.length; i++) {
+                String w = normalizeDialogue(parts[i].trim());
+                if (w.isEmpty()) continue;
+                if (w.equals(userToks[0])) return true;
+            }
+        }
+        return false;
+    }
+
+    private static String normalizeDialogue(String s) {
+        if (s == null) return "";
+        String n = Normalizer.normalize(s, Normalizer.Form.NFD);
+        n = n.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        n = n.toLowerCase(Locale.ROOT);
+        n = n.replaceAll("[^\\p{L}\\p{N}\\s]", " ");
+        return n.replaceAll("\\s+", " ").trim();
+    }
+
+    // ================================================================
+    // DISPATCH
+    // ================================================================
 
     private Response dispatch(Lang.IntentMatch m, String q) {
         String id = m.id;
@@ -179,7 +417,7 @@ class CommandRouter {
             int len = 16;
             String np = m.params.get("n");
             if (np != null) try { len = Integer.parseInt(np.replaceAll("[^0-9]", "")); }
-				catch (Exception ignored) {}
+                catch (Exception ignored) {}
             if (len < 4) len = 4;
             if (len > 64) len = 64;
             return Response.speak(Lang.f(209, randomPassword(len)));
@@ -323,7 +561,8 @@ class CommandRouter {
             return Response.open(Lang.get(109), i);
         }
         if ("emergency".equals(id)) {
-            Intent i = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:911"));
+            Intent i = new Intent(Intent.ACTION_DIAL,
+								  Uri.parse("tel:" + Lang.getEmergencyNumber()));
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             return Response.open(Lang.get(110), i);
         }
@@ -446,7 +685,7 @@ class CommandRouter {
             if (t == null) return Response.speak(Lang.get(186));
             try {
                 String b = android.util.Base64.encodeToString(
-					t.getBytes("UTF-8"), android.util.Base64.NO_WRAP);
+                    t.getBytes("UTF-8"), android.util.Base64.NO_WRAP);
                 return Response.speak(Lang.f(185, b));
             } catch (Exception e) { return Response.speak(Lang.get(186)); }
         }
@@ -707,11 +946,11 @@ class CommandRouter {
     private Response calculate(String exprRaw) {
         String expr = exprRaw;
         expr = expr.replace(Lang.get(293), " + ")
-			.replace(Lang.get(294), " - ")
-			.replace(Lang.get(295), " * ")
-			.replace(Lang.get(296), " / ")
-			.replace(Lang.get(297), " ^ ")
-			.replace(Lang.get(298), " % ");
+            .replace(Lang.get(294), " - ")
+            .replace(Lang.get(295), " * ")
+            .replace(Lang.get(296), " / ")
+            .replace(Lang.get(297), " ^ ")
+            .replace(Lang.get(298), " % ");
         if (expr.startsWith(Lang.get(299))) {
             try {
                 double a = Double.parseDouble(expr.substring(Lang.get(299).length()).trim());
@@ -871,7 +1110,7 @@ class CommandRouter {
             if (i == null) return "";
             int status = i.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
             boolean charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
-				|| status == android.os.BatteryManager.BATTERY_STATUS_FULL;
+                || status == android.os.BatteryManager.BATTERY_STATUS_FULL;
             return charging ? Lang.get(98) : Lang.get(99);
         } catch (Exception e) { return ""; }
     }
