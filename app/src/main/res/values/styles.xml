@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@android:style/Theme.Holo.Light">
-	</style>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorPrimary">#7C4DFF</item>
+        <item name="android:colorAccent">#7C4DFF</item>
+        <item name="android:statusBarColor">#0B0F14</item>
+        <item name="android:navigationBarColor">#0B0F14</item>
+    </style>
+
 </resources>

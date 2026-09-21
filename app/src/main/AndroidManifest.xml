@@ -9,19 +9,25 @@
         android:theme="@style/AppTheme"
         android:resizeableActivity="true">
 
+        <!-- Pantalla de configuración / inicio -->
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
-            android:exported="true"
-            android:launchMode="singleInstance">
-
-            <!-- Filtro para que la app aparezca en el lanzador normal -->
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!-- Filtro para ser reconocida como aplicación de asistencia -->
+        <!-- Pantalla del asistente -->
+        <activity
+            android:name=".AssistantActivity"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
