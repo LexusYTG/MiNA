@@ -8,7 +8,6 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 class VoiceEngine {
 
@@ -23,7 +22,7 @@ class VoiceEngine {
     private final Context ctx;
     private SpeechRecognizer recognizer;
     private Listener listener;
-    private boolean listening;
+    private volatile boolean listening;
 
     VoiceEngine(Context ctx) {
         this.ctx = ctx.getApplicationContext();
@@ -37,10 +36,14 @@ class VoiceEngine {
 
     void setListener(Listener l) { this.listener = l; }
 
+    void init() {
+        if (listener != null) listener.onReady();
+    }
+
     void start() {
-        if (listening || !isAvailable()) {
-            if (listener != null && !isAvailable())
-                listener.onError("Reconocimiento de voz no disponible");
+        if (listening) return;
+        if (!isAvailable()) {
+            if (listener != null) listener.onError(Lang.get(1159));
             return;
         }
         if (recognizer == null) {
@@ -50,28 +53,40 @@ class VoiceEngine {
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
 				   RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,
-				   Locale.getDefault().toLanguageTag());
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Lang.getLocaleTag());
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Lang.getLocaleTag());
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
         i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.getPackageName());
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
         listening = true;
-        recognizer.startListening(i);
+        try {
+            recognizer.startListening(i);
+        } catch (Exception e) {
+            listening = false;
+            if (listener != null) listener.onError(Lang.get(1160));
+        }
     }
 
     void stop() {
-        if (recognizer != null) recognizer.stopListening();
+        if (recognizer != null) {
+            try { recognizer.stopListening(); } catch (Exception ignored) {}
+        }
         listening = false;
     }
 
     void cancel() {
-        if (recognizer != null) recognizer.cancel();
+        if (recognizer != null) {
+            try { recognizer.cancel(); } catch (Exception ignored) {}
+        }
         listening = false;
     }
 
     void destroy() {
         if (recognizer != null) {
-            recognizer.destroy();
+            try { recognizer.destroy(); } catch (Exception ignored) {}
             recognizer = null;
         }
         listening = false;
@@ -110,17 +125,25 @@ class VoiceEngine {
 
     private String mapError(int error) {
         switch (error) {
-            case SpeechRecognizer.ERROR_NO_MATCH:        return "No te entendí";
-            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:  return "No escuché nada";
+            case SpeechRecognizer.ERROR_NO_MATCH:
+                return Lang.get(1151);
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                return Lang.get(1152);
             case SpeechRecognizer.ERROR_NETWORK:
-            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: return "Sin conexión";
-            case SpeechRecognizer.ERROR_AUDIO:           return "Error de audio";
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                return Lang.get(1153);
+            case SpeechRecognizer.ERROR_AUDIO:
+                return Lang.get(1154);
             case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
-                return "Falta permiso de micrófono";
-            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: return "Ocupado, reintenta";
-            case SpeechRecognizer.ERROR_SERVER:          return "Error del servidor";
+                return Lang.get(1150);
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                return Lang.get(1155);
+            case SpeechRecognizer.ERROR_SERVER:
+                return Lang.get(1156);
             case SpeechRecognizer.ERROR_CLIENT:
-            default:                                     return "Error (" + error + ")";
+                return Lang.get(1157);
+            default:
+                return Lang.f(1163, error);
         }
     }
 }

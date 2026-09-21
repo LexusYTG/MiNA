@@ -4,13 +4,17 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -18,6 +22,17 @@ import android.widget.TextView;
 public class AssistantActivity extends Activity {
 
     private static final int REQ_MIC = 100;
+
+    private final Lang.Listener langListener = new Lang.Listener() {
+        @Override public void onLanguageChanged() {
+            runOnUiThread(new Runnable() {
+					@Override public void run() {
+						stopPulse();
+						setContentView(buildUi());
+					}
+				});
+        }
+    };
 
     private VoiceEngine voice;
     private TtsEngine   tts;
@@ -27,6 +42,8 @@ public class AssistantActivity extends Activity {
     private TextView statusText;
     private TextView partialText;
     private LinearLayout transcript;
+    private Button voiceSetupButton;
+    private LinearLayout panel;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
 
@@ -34,36 +51,58 @@ public class AssistantActivity extends Activity {
     private boolean pendingAutoListen;
     private boolean pulseOn;
     private int     pulseStep;
+    private boolean greeted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setBackgroundDrawable(new ColorDrawable(Ui.BG));
-        getWindow().setStatusBarColor(Ui.BG);
-        getWindow().setNavigationBarColor(Ui.BG);
+
+        Lang.init(this);
+        Lang.addListener(langListener);
+
+        Intent incoming = getIntent();
+        String action = (incoming != null && incoming.getAction() != null)
+			? incoming.getAction() : "(null)";
+
+        launchedAsAssist = Intent.ACTION_ASSIST.equals(action)
+			|| Intent.ACTION_VOICE_COMMAND.equals(action);
+
         setContentView(buildUi());
 
-        launchedAsAssist = Intent.ACTION_ASSIST.equals(getIntent().getAction());
-
-        router = new CommandRouter();
+        router = new CommandRouter(this);
 
         voice = new VoiceEngine(this);
         voice.setListener(voiceListener);
+        voice.init();
 
         tts = new TtsEngine();
         tts.setListener(ttsListener);
-        tts.init();
+        tts.init(this);
 
-        setStatus(voice.isAvailable()
-				  ? "Pulsa el orbe para hablar"
-				  : "Reconocimiento de voz no disponible",
-				  voice.isAvailable() ? Ui.TEXT_DIM : Ui.WARN);
+        setStatus(Lang.f(1107, action), Ui.TEXT_DIM);
+
+        updateVoiceSetupButton();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getAction() != null) {
+            setStatus(Lang.f(1107, intent.getAction()), Ui.TEXT_DIM);
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (transcript.getChildCount() == 0) {
+        if (tts != null && !tts.isReady()) {
+            tts.init(this);
+        }
+        updateVoiceSetupButton();
+
+        if (!greeted && transcript != null && transcript.getChildCount() == 0) {
+            greeted = true;
             ui.postDelayed(new Runnable() {
 					@Override public void run() { if (!isFinishing()) greet(); }
 				}, 250);
@@ -81,57 +120,124 @@ public class AssistantActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        Lang.removeListener(langListener);
         voice.destroy();
         tts.destroy();
         ui.removeCallbacksAndMessages(null);
     }
 
     private View buildUi() {
-        LinearLayout root = Ui.column(this);
-        root.setBackgroundColor(Ui.BG);
-        int p = Ui.dp(this, 20);
-        root.setPadding(p, Ui.dp(this, 24), p, Ui.dp(this, 20));
+        FrameLayout root = new FrameLayout(this);
 
-        micOrb = Ui.text(this, "◉", 64, Ui.ACCENT, true);
+        View dim = new View(this);
+        dim.setBackgroundColor(0x99000000);
+        dim.setOnClickListener(new View.OnClickListener() {
+				@Override public void onClick(View v) { finish(); }
+			});
+        root.addView(dim, new FrameLayout.LayoutParams(
+						 FrameLayout.LayoutParams.MATCH_PARENT,
+						 FrameLayout.LayoutParams.MATCH_PARENT));
+
+        panel = Ui.column(this);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Ui.SURFACE);
+        float r = Ui.dp(this, 28);
+        bg.setCornerRadii(new float[]{ r, r, r, r, 0, 0, 0, 0 });
+        panel.setBackground(bg);
+
+        View handle = new View(this);
+        GradientDrawable handleBg = new GradientDrawable();
+        handleBg.setColor(0xFF3A4250);
+        handleBg.setCornerRadius(Ui.dp(this, 2));
+        handle.setBackground(handleBg);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(
+			Ui.dp(this, 36), Ui.dp(this, 4));
+        handleLp.gravity = Gravity.CENTER_HORIZONTAL;
+        handleLp.topMargin = Ui.dp(this, 8);
+        panel.addView(handle, handleLp);
+
+        panel.addView(Ui.space(this, 12));
+
+        micOrb = Ui.text(this, "◉", 44, Ui.ACCENT, true);
         micOrb.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams orbLp = Ui.matchWrap();
-        orbLp.topMargin = Ui.dp(this, 8);
-        root.addView(micOrb, orbLp);
+        panel.addView(micOrb, Ui.matchWrap());
         micOrb.setOnClickListener(new View.OnClickListener() {
 				@Override public void onClick(View v) { toggleListening(); }
 			});
 
-        statusText = Ui.text(this, "", 15, Ui.TEXT_DIM, false);
+        statusText = Ui.text(this, "", 14, Ui.TEXT_DIM, false);
         statusText.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams stLp = Ui.matchWrap();
-        stLp.topMargin = Ui.dp(this, 4);
-        root.addView(statusText, stLp);
+        stLp.topMargin = Ui.dp(this, 6);
+        panel.addView(statusText, stLp);
 
-        partialText = Ui.text(this, "", 18, Ui.TEXT, false);
+        voiceSetupButton = Ui.button(this, Lang.get(1105), false);
+        voiceSetupButton.setVisibility(View.GONE);
+        LinearLayout.LayoutParams vLp = Ui.matchWrap();
+        vLp.topMargin = Ui.dp(this, 10);
+        vLp.leftMargin = Ui.dp(this, 24);
+        vLp.rightMargin = Ui.dp(this, 24);
+        panel.addView(voiceSetupButton, vLp);
+        voiceSetupButton.setOnClickListener(new View.OnClickListener() {
+				@Override public void onClick(View v) { tts.openVoiceSettings(); }
+			});
+
+        partialText = Ui.text(this, "", 16, Ui.TEXT, false);
         partialText.setGravity(Gravity.CENTER);
-        partialText.setMinLines(2);
+        partialText.setMinLines(1);
         LinearLayout.LayoutParams ptLp = Ui.matchWrap();
-        ptLp.topMargin = Ui.dp(this, 20);
-        root.addView(partialText, ptLp);
+        ptLp.topMargin = Ui.dp(this, 14);
+        ptLp.leftMargin = Ui.dp(this, 16);
+        ptLp.rightMargin = Ui.dp(this, 16);
+        panel.addView(partialText, ptLp);
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackground(Ui.round(Ui.SURFACE_2, 16, this));
         LinearLayout.LayoutParams scLp = new LinearLayout.LayoutParams(
 			LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        scLp.topMargin = Ui.dp(this, 16);
+        scLp.topMargin = Ui.dp(this, 12);
+        scLp.leftMargin = Ui.dp(this, 16);
+        scLp.rightMargin = Ui.dp(this, 16);
+        scLp.bottomMargin = Ui.dp(this, 20);
         scroll.setLayoutParams(scLp);
-        scroll.setBackground(Ui.round(Ui.SURFACE, 16, this));
-        int sp = Ui.dp(this, 14);
-        scroll.setPadding(sp, sp, sp, sp);
 
         transcript = Ui.column(this);
+        int sp = Ui.dp(this, 12);
+        scroll.setPadding(sp, sp, sp, sp);
         scroll.addView(transcript, Ui.matchWrap());
-        root.addView(scroll);
+        panel.addView(scroll);
+
+        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
+			FrameLayout.LayoutParams.MATCH_PARENT,
+			FrameLayout.LayoutParams.WRAP_CONTENT);
+        panelParams.gravity = Gravity.BOTTOM;
+        root.addView(panel, panelParams);
+
+        panel.post(new Runnable() {
+				@Override public void run() {
+					DisplayMetrics dm = getResources().getDisplayMetrics();
+					int maxH = (int)(dm.heightPixels * 0.75f);
+					int measured = panel.getHeight();
+					if (measured > maxH) {
+						ViewGroup.LayoutParams lp = panel.getLayoutParams();
+						lp.height = maxH;
+						panel.setLayoutParams(lp);
+					}
+				}
+			});
 
         return root;
     }
 
+    private void updateVoiceSetupButton() {
+        if (voiceSetupButton == null) return;
+        boolean show = tts != null && !tts.isReady();
+        voiceSetupButton.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
     private void greet() {
-        say("Hola, soy MiNA. En que te ayudo", launchedAsAssist);
+        say(Lang.get(1201), launchedAsAssist);
     }
 
     private void toggleListening() {
@@ -157,18 +263,25 @@ public class AssistantActivity extends Activity {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 voice.start();
             } else {
-                setStatus("Permiso de microfono denegado", Ui.WARN);
+                setStatus(Lang.get(1104), Ui.WARN);
             }
         }
     }
 
     private void handleUserText(String text) {
-        appendLine("Tu", text, Ui.TEXT);
+        appendLine(Lang.get(1108), text, Ui.TEXT);
         CommandRouter.Response r = router.route(text);
-        appendLine("MiNA", r.text, Ui.ACCENT);
         say(r.text, false);
 
-        if ("finish".equals(r.action)) {
+        if (r.intent != null) {
+            try {
+                startActivity(r.intent);
+            } catch (Exception e) {
+                setStatus(Lang.get(1106), Ui.WARN);
+                return;
+            }
+        }
+        if (r.closeAfter) {
             ui.postDelayed(new Runnable() {
 					@Override public void run() { finish(); }
 				}, 1400);
@@ -178,17 +291,15 @@ public class AssistantActivity extends Activity {
     private final VoiceEngine.Listener voiceListener = new VoiceEngine.Listener() {
         @Override public void onReady() {
             startPulse();
-            setStatus("Escuchando", Ui.ACCENT);
+            setStatus(Lang.get(1102), Ui.ACCENT);
             partialText.setText("");
         }
-        @Override public void onPartial(String text) {
-            partialText.setText(text);
-        }
+        @Override public void onPartial(String text) { partialText.setText(text); }
         @Override public void onFinal(String text) {
             stopPulse();
             partialText.setText("");
             if (text == null || text.trim().isEmpty()) {
-                setStatus("No te entendi, intentalo de nuevo", Ui.WARN);
+                setStatus(Lang.get(1103), Ui.WARN);
                 return;
             }
             handleUserText(text);
@@ -202,7 +313,11 @@ public class AssistantActivity extends Activity {
     };
 
     private final TtsEngine.Listener ttsListener = new TtsEngine.Listener() {
-        @Override public void onReady() {}
+        @Override public void onReady() {
+            runOnUiThread(new Runnable() {
+					@Override public void run() { updateVoiceSetupButton(); }
+				});
+        }
         @Override public void onDone() {
             if (pendingAutoListen && !isFinishing()) {
                 pendingAutoListen = false;
@@ -210,30 +325,32 @@ public class AssistantActivity extends Activity {
                 return;
             }
             if (!isFinishing()) {
-                setStatus("Pulsa el orbe para hablar", Ui.TEXT_DIM);
+                setStatus(Lang.get(1100), Ui.TEXT_DIM);
             }
         }
     };
 
     private void say(String text, boolean chainListen) {
-        appendLine("MiNA", text, Ui.ACCENT);
+        appendLine(Lang.get(1109), text, Ui.ACCENT);
         pendingAutoListen = chainListen;
         tts.speak(text);
     }
 
     private void setStatus(String s, int color) {
+        if (statusText == null) return;
         statusText.setText(s);
         statusText.setTextColor(color);
     }
 
     private void appendLine(String who, String text, int color) {
+        if (transcript == null) return;
         LinearLayout row = Ui.row(this);
         LinearLayout.LayoutParams lp = Ui.matchWrap();
-        lp.topMargin = Ui.dp(this, 8);
+        lp.topMargin = Ui.dp(this, 6);
         row.setLayoutParams(lp);
 
-        row.addView(Ui.text(this, who + ": ", 14, color, true));
-        row.addView(Ui.text(this, text, 14, Ui.TEXT, false));
+        row.addView(Ui.text(this, who + ": ", 13, color, true));
+        row.addView(Ui.text(this, text, 13, Ui.TEXT, false));
         transcript.addView(row);
 
         final ScrollView sv = (ScrollView) transcript.getParent();
@@ -252,15 +369,17 @@ public class AssistantActivity extends Activity {
     private void stopPulse() {
         pulseOn = false;
         ui.removeCallbacks(pulseRunnable);
-        micOrb.setTextSize(64);
-        micOrb.setTextColor(Ui.ACCENT);
+        if (micOrb != null) {
+            micOrb.setTextSize(44);
+            micOrb.setTextColor(Ui.ACCENT);
+        }
     }
 
     private final Runnable pulseRunnable = new Runnable() {
         @Override public void run() {
-            if (!pulseOn) return;
+            if (!pulseOn || micOrb == null) return;
             pulseStep++;
-            micOrb.setTextSize(pulseStep % 2 == 0 ? 64 : 72);
+            micOrb.setTextSize(pulseStep % 2 == 0 ? 44 : 50);
             micOrb.setTextColor(pulseStep % 2 == 0 ? Ui.ACCENT : 0xFFB39DFF);
             ui.postDelayed(this, 450);
         }
