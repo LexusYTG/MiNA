@@ -35,8 +35,6 @@ public class AssistantActivity extends Activity {
     private boolean pulseOn;
     private int     pulseStep;
 
-    // ------------------------------------------------------------- ciclo
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,7 +50,7 @@ public class AssistantActivity extends Activity {
         voice = new VoiceEngine(this);
         voice.setListener(voiceListener);
 
-        tts = new TtsEngine(this);
+        tts = new TtsEngine();
         tts.setListener(ttsListener);
         tts.init();
 
@@ -87,8 +85,6 @@ public class AssistantActivity extends Activity {
         tts.destroy();
         ui.removeCallbacksAndMessages(null);
     }
-
-    // --------------------------------------------------------------- UI
 
     private View buildUi() {
         LinearLayout root = Ui.column(this);
@@ -134,10 +130,8 @@ public class AssistantActivity extends Activity {
         return root;
     }
 
-    // ------------------------------------------------------------ flujo
-
     private void greet() {
-        say("Hola, soy MiNA. ¿En qué te ayudo?", launchedAsAssist);
+        say("Hola, soy MiNA. En que te ayudo", launchedAsAssist);
     }
 
     private void toggleListening() {
@@ -163,13 +157,13 @@ public class AssistantActivity extends Activity {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 voice.start();
             } else {
-                setStatus("Permiso de micrófono denegado", Ui.WARN);
+                setStatus("Permiso de microfono denegado", Ui.WARN);
             }
         }
     }
 
     private void handleUserText(String text) {
-        appendLine("Tú", text, Ui.TEXT);
+        appendLine("Tu", text, Ui.TEXT);
         CommandRouter.Response r = router.route(text);
         appendLine("MiNA", r.text, Ui.ACCENT);
         say(r.text, false);
@@ -181,12 +175,10 @@ public class AssistantActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------- listeners
-
     private final VoiceEngine.Listener voiceListener = new VoiceEngine.Listener() {
         @Override public void onReady() {
             startPulse();
-            setStatus("Escuchando…", Ui.ACCENT);
+            setStatus("Escuchando", Ui.ACCENT);
             partialText.setText("");
         }
         @Override public void onPartial(String text) {
@@ -196,7 +188,7 @@ public class AssistantActivity extends Activity {
             stopPulse();
             partialText.setText("");
             if (text == null || text.trim().isEmpty()) {
-                setStatus("No te entendí, inténtalo de nuevo", Ui.WARN);
+                setStatus("No te entendi, intentalo de nuevo", Ui.WARN);
                 return;
             }
             handleUserText(text);
@@ -206,11 +198,11 @@ public class AssistantActivity extends Activity {
             partialText.setText("");
             setStatus(friendly, Ui.WARN);
         }
-        @Override public void onEnd() { /* no-op */ }
+        @Override public void onEnd() {}
     };
 
     private final TtsEngine.Listener ttsListener = new TtsEngine.Listener() {
-        @Override public void onReady() { /* nada */ }
+        @Override public void onReady() {}
         @Override public void onDone() {
             if (pendingAutoListen && !isFinishing()) {
                 pendingAutoListen = false;
@@ -223,23 +215,10 @@ public class AssistantActivity extends Activity {
         }
     };
 
-    // -------------------------------------------------------- utilidades
-
     private void say(String text, boolean chainListen) {
         appendLine("MiNA", text, Ui.ACCENT);
-        if (tts.isReady()) {
-            pendingAutoListen = chainListen;
-            tts.speak(text);
-        } else {
-            // TTS aún no listo: pequeño respiro y a escuchar
-            if (chainListen) {
-                ui.postDelayed(new Runnable() {
-						@Override public void run() {
-							if (checkMic()) voice.start();
-						}
-					}, 900);
-            }
-        }
+        pendingAutoListen = chainListen;
+        tts.speak(text);
     }
 
     private void setStatus(String s, int color) {
@@ -262,8 +241,6 @@ public class AssistantActivity extends Activity {
 				@Override public void run() { sv.fullScroll(View.FOCUS_DOWN); }
 			});
     }
-
-    // ------------------------------------------------------ animación
 
     private void startPulse() {
         if (pulseOn) return;
